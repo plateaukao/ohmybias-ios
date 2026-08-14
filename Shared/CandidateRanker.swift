@@ -1,0 +1,149 @@
+import Foundation
+
+/// Candidate ranking: freq-based sorting, mode filtering, domain context, fuzzy match.
+final class CandidateRanker {
+
+    private let wikiCorpus: WikiCorpus
+    private let prefs: IMEPreferences
+
+    init(wikiCorpus: WikiCorpus = .shared, prefs: IMEPreferences = DefaultPreferences.shared) {
+        self.wikiCorpus = wikiCorpus
+        self.prefs = prefs
+    }
+
+    // MARK: - Domain context tracking (MoE-style)
+
+    /// Session domain hit counts: domain_key → cumulative weight
+    private var domainHits: [String: Int] = [:]
+    private var domainCache: [String: Bool] = [:]  // char → is domain-relevant
+
+    /// Called after each commit to update domain context
+    func updateDomainContext(_ text: String) {
+        guard prefs.suggestStrategy == "domain" else { return }
+        for ch in text {
+            let s = String(ch)
+            if domainsFor(s) { domainHits["_all", default: 0] += 1 }
+        }
+    }
+
+    /// Domain boost score for a candidate (0.0 ~ 1.0)
+    func domainBoost(for char: String) -> Double {
+        guard !domainHits.isEmpty else { return 0 }
+        guard domainsFor(char) else { return 0 }
+        let total = domainHits.values.reduce(0, +)
+        guard total > 0 else { return 0 }
+        return Double(domainHits["_all"] ?? 0) / Double(total)
+    }
+
+    func resetDomainContext() { domainHits.removeAll() }
+
+    /// Check if any enabled domain contains this character
+    private func domainsFor(_ char: String) -> Bool {
+        if let cached = domainCache[char] { return cached }
+        let hit = !wikiCorpus.suggestDomainTerms(prefix: char, limit: 1).isEmpty
+        domainCache[char] = hit
+        return hit
+    }
+
+    // MARK: - Mode filtering + ranking
+
+    /// Sort and filter candidates based on current input mode.
+    func rank(raw: [String], code: String, prev: String,
+              mode: InputEngine.InputMode, cinTable: CINTable, freqTracker: FreqTracker) -> [String] {
+        var candidates = freqTracker.sortedWithContext(raw, forCode: code, prev: prev)
+
+        switch mode {
+        case .sp:
+            let tbl = cinTable.shortestCodesTable
+            candidates = candidates.filter { tbl[$0]?.contains(code) == true }
+        case .sl:
+            let tbl = cinTable.longestCodesTable
+            candidates = candidates.filter { tbl[$0]?.contains(code) == true }
+        case .ts:
+            var seen = Set<String>()
+            candidates = candidates.compactMap { ch in
+                let s = cinTable.convert(ch, map: cinTable.t2s)
+                return seen.insert(s).inserted ? s : nil
+            }
+        case .st:
+            var seen = Set<String>()
+            candidates = candidates.compactMap { ch in
+                let t = cinTable.convert(ch, map: cinTable.s2t)
+                return seen.insert(t).inserted ? t : nil
+            }
+        case .s:
+            let t2s = cinTable.t2s
+            candidates = candidates.filter { ch in
+                guard let s = t2s[ch] else { return true }; return s == ch
+            }
+        case .t, .j: break
+        }
+
+        // Domain-aware reranking (stable: preserve original order when boost is equal)
+        if prefs.suggestStrategy == "domain" && !domainHits.isEmpty && candidates.count > 1 {
+            let indexed = candidates.enumerated().map { ($0.offset, $0.element) }
+            candidates = indexed.sorted {
+                let b0 = domainBoost(for: $0.1), b1 = domainBoost(for: $1.1)
+                if b0 != b1 { return b0 > b1 }
+                return $0.0 < $1.0
+            }.map { $0.1 }
+        }
+
+        // Region variant: demote opposite-region terms to end
+        if candidates.count > 1 {
+            let demoted = candidates.filter { wikiCorpus.isRegionDemoted($0) }
+            if !demoted.isEmpty {
+                candidates = candidates.filter { !wikiCorpus.isRegionDemoted($0) } + demoted
+            }
+        }
+
+        return candidates
+    }
+
+    // MARK: - Adjacent-key fuzzy matching
+
+    private static let adjacentKeys: [Character: [Character]] = {
+        let rows: [[Character]] = [
+            ["q","w","e","r","t","y","u","i","o","p"],
+            ["a","s","d","f","g","h","j","k","l"],
+            ["z","x","c","v","b","n","m"]
+        ]
+        var map: [Character: [Character]] = [:]
+        for (r, row) in rows.enumerated() {
+            for (c, ch) in row.enumerated() {
+                var adj: [Character] = []
+                for dc in [-1, 1] {
+                    let nc = c + dc
+                    if nc >= 0 && nc < row.count { adj.append(row[nc]) }
+                }
+                for dr in [-1, 1] {
+                    let nr = r + dr
+                    guard nr >= 0 && nr < rows.count else { continue }
+                    let offsets = dr == -1 ? [c - 1, c] : (r == 0 ? [c, c + 1] : [c - 1, c])
+                    for nc in offsets where nc >= 0 && nc < rows[nr].count {
+                        adj.append(rows[nr][nc])
+                    }
+                }
+                map[ch] = adj
+            }
+        }
+        return map
+    }()
+
+    func fuzzyLookup(_ code: String, cinTable: CINTable) -> [String] {
+        var seen = Set<String>()
+        var results: [String] = []
+        let chars = Array(code)
+        for i in 0..<chars.count {
+            guard let neighbors = Self.adjacentKeys[chars[i]] else { continue }
+            for neighbor in neighbors {
+                var variant = chars
+                variant[i] = neighbor
+                for ch in cinTable.lookup(String(variant)) where seen.insert(ch).inserted {
+                    results.append(ch)
+                }
+            }
+        }
+        return Array(results.prefix(20))
+    }
+}
