@@ -43,4 +43,4 @@ Shared 引擎平台無關，測試在 **macOS host** 上以 swiftc 編譯執行�
 - **liu.cin 有版權（行易），只能使用者自行匯入、on-device 編譯，絕不預編/隨附 liu.bin。**
 - `phrases.bin` 的 key 是詞首單字；萌典用「臺」不用「台」（打「台」不會出聯想，打「臺」才會）。
 - 鍵盤 extension 記憶體上限約 60MB — `MemoryBudget` 管控 lazy 載入，新增資料結構要掛預算。
-- `,,V` 剪貼簿指令需要鍵盤「完整取用權限」（RequestsOpenAccess 目前為 NO，未開時 toast 剪貼簿為空）。
+- `,,V` 剪貼簿指令需要使用者在 iOS 鍵盤設定啟用「完整取用權限」（`RequestsOpenAccess` 已請求此權限）。

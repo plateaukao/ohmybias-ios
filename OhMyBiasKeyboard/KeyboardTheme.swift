@@ -8,7 +8,12 @@ enum KeyboardTheme {
     /// 依 palette key 取動態色；skin 未定義時用預設 #RRGGBB(AA)
     private static func pal(_ key: String, _ lightDefault: String, _ darkDefault: String) -> UIColor {
         UIColor { traits in
-            let dark = traits.userInterfaceStyle == .dark
+            // 鍵盤 extension 會繼承 host app 的 appearance；host 強制淺色時，
+            // 仍應依系統外觀顯示使用者選擇的深色鍵盤。
+            let style = UIScreen.main.traitCollection.userInterfaceStyle
+            let dark = style == .unspecified
+                ? traits.userInterfaceStyle == .dark
+                : style == .dark
             let hex = SkinSettings.shared.colorHex(key, dark: dark) ?? (dark ? darkDefault : lightDefault)
             return parse(hex)
         }

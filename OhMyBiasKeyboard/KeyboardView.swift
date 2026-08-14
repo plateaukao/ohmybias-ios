@@ -9,6 +9,7 @@ enum KeyAction {
     case toggleLanguage        // 中 ↔ 英
     case shift                 // 英文模式大寫
     case page(KeyboardView.Page)
+    case toggleToolbarPage(KeyboardView.Page)
     case zhuyinSymbol(String)
     case zhuyinTone(String)
     case zhuyinExit
@@ -44,6 +45,7 @@ final class KeyboardView: UIView {
 
     private let rowsStack = UIStackView()
     private var keyButtons: [KeyButton] = []
+    private var pageBeforeToolbarToggle: Page?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -65,6 +67,23 @@ final class KeyboardView: UIView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     // MARK: - Layout definitions
+
+    func showPage(_ page: Page) {
+        currentPage = page
+        pageBeforeToolbarToggle = nil
+        reloadKeys()
+    }
+
+    func toggleToolbarPage(_ page: Page) {
+        if currentPage == page {
+            currentPage = pageBeforeToolbarToggle ?? .letters
+            pageBeforeToolbarToggle = nil
+        } else {
+            pageBeforeToolbarToggle = currentPage
+            currentPage = page
+        }
+        reloadKeys()
+    }
 
     func reloadKeys() {
         rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }

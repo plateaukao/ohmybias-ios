@@ -49,21 +49,21 @@ final class CandidateBar: UIView {
         case 1:  return ToolbarItem(icon: "gearshape", text: nil, label: "設定", action: .openSettings)
         case 2:  return ToolbarItem(icon: "chevron.down", text: nil, label: "收折鍵盤", action: .dismissKeyboard)
         case 3:  return ToolbarItem(icon: nil, text: "米", label: "中英切換", action: .toggleLanguage, isLanguage: true)
-        case 5:  return ToolbarItem(icon: "heart.fill", text: nil, label: "常用語", action: .page(.phrases))
-        case 7:  return ToolbarItem(icon: "curlybraces", text: nil, label: "符號面板", action: .page(.symbolPanel))
-        case 8:  return ToolbarItem(icon: "face.smiling", text: nil, label: "Emoji", action: .page(.emoji))
+        case 5:  return ToolbarItem(icon: "heart.fill", text: nil, label: "常用語", action: .toggleToolbarPage(.phrases))
+        case 7:  return ToolbarItem(icon: "curlybraces", text: nil, label: "符號面板", action: .toggleToolbarPage(.symbolPanel))
+        case 8:  return ToolbarItem(icon: "face.smiling", text: nil, label: "Emoji", action: .toggleToolbarPage(.emoji))
         case 9:
             let page: KeyboardView.Page = SkinSettings.shared.keyboardLayout == "row" ? .numbers : .numeric9
-            return ToolbarItem(icon: "textformat.123", text: nil, label: "數字鍵盤", action: .page(page))
+            return ToolbarItem(icon: "textformat.123", text: nil, label: "數字鍵盤", action: .toggleToolbarPage(page))
         // 全選在 iOS 鍵盤 extension 無 API 不可實作 — 依使用者決定，此位置固定放 ♥ 常用語
-        case 10: return ToolbarItem(icon: "heart.fill", text: nil, label: "常用語", action: .page(.phrases))
+        case 10: return ToolbarItem(icon: "heart.fill", text: nil, label: "常用語", action: .toggleToolbarPage(.phrases))
         case 13: return ToolbarItem(icon: "doc.on.clipboard", text: nil, label: "貼上", action: .pasteClipboard)
         case 16: return ToolbarItem(icon: "arrow.left", text: nil, label: "游標左移", action: .cursorLeft)
         case 17: return ToolbarItem(icon: "arrow.right", text: nil, label: "游標右移", action: .cursorRight)
-        case 26: return ToolbarItem(icon: nil, text: "顏", label: "顏文字", action: .page(.kaomojis))
+        case 26: return ToolbarItem(icon: nil, text: "顏", label: "顏文字", action: .toggleToolbarPage(.kaomojis))
         case 27: return ToolbarItem(icon: nil, text: "ㄅ", label: "注音查碼", action: .enterZhuyin)
-        case 29: return ToolbarItem(icon: "textformat.123", text: nil, label: "九宮格數字", action: .page(.numeric9))
-        case 30: return ToolbarItem(icon: "curlybraces", text: nil, label: "符號面板", action: .page(.symbolPanel))
+        case 29: return ToolbarItem(icon: "textformat.123", text: nil, label: "九宮格數字", action: .toggleToolbarPage(.numeric9))
+        case 30: return ToolbarItem(icon: "curlybraces", text: nil, label: "符號面板", action: .toggleToolbarPage(.symbolPanel))
         default: return nil
         }
     }

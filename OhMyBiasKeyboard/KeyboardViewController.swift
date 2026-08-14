@@ -38,6 +38,11 @@ final class KeyboardViewController: UIInputViewController {
         keyboardView.reloadKeys()
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        applyToolbarBackground()
+    }
+
     /// Enter 鍵依 host app 的 returnKeyType 顯示（搜尋/前往/送出…）
     private static func returnLabel(for type: UIReturnKeyType?) -> String {
         switch type {
@@ -109,11 +114,18 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func applyToolbarBackground() {
-        // iOS 將 extension 的 view 包在有上方圓角的 input view；兩者都要著色，
-        // 才不會讓工具列上方露出系統預設的鍵盤背景。
-        view.backgroundColor = KeyboardTheme.toolbarBackground
-        inputView?.backgroundColor = KeyboardTheme.toolbarBackground
-        view.superview?.backgroundColor = KeyboardTheme.toolbarBackground
+        // iOS 將 extension 的 view 包在稍後才掛載的、有上方圓角的 input-host；
+        // 從 extension view 一路著色至 window，避免露出系統預設鍵盤背景。
+        let color = KeyboardTheme.toolbarBackground
+        view.backgroundColor = color
+        inputView?.backgroundColor = color
+        var container = view.superview
+        while let current = container {
+            current.backgroundColor = color
+            if current === view.window { break }
+            container = current.superview
+        }
+        view.window?.backgroundColor = color
     }
 
     // MARK: - Key handling
@@ -138,13 +150,13 @@ final class KeyboardViewController: UIInputViewController {
         case .toggleLanguage:
             engine.toggleEnglishMode()
             keyboardView.isEnglishMode = engine.isEnglishMode
-            keyboardView.currentPage = .letters  // 從工具列切換時回到字母頁
-            keyboardView.reloadKeys()
+            keyboardView.showPage(.letters)  // 從工具列切換時回到字母頁
             OhMyBiasPrefs.lastEnglishMode = engine.isEnglishMode
             refreshIdleBar()
         case .page(let page):
-            keyboardView.currentPage = page
-            keyboardView.reloadKeys()
+            keyboardView.showPage(page)
+        case .toggleToolbarPage(let page):
+            keyboardView.toggleToolbarPage(page)
         case .shift:
             keyboardView.isShifted.toggle()
             keyboardView.reloadKeys()
@@ -167,6 +179,10 @@ final class KeyboardViewController: UIInputViewController {
             if count > 0 { textDocumentProxy.adjustTextPosition(byCharacterOffset: count) }
         case .pasteClipboard:
             engine.handleEscape()
+            guard hasFullAccess else {
+                showToast("請在鍵盤設定啟用完整取用權限", duration: 1.5)
+                return
+            }
             if let text = ClipboardProcessor.plainText(), !text.isEmpty {
                 textDocumentProxy.insertText(text)
             } else {
@@ -177,8 +193,7 @@ final class KeyboardViewController: UIInputViewController {
             textDocumentProxy.insertText("\t")
         case .enterZhuyin:
             engine.switchToMode("zh")
-            keyboardView.currentPage = .zhuyin
-            keyboardView.reloadKeys()
+            keyboardView.showPage(.zhuyin)
         case .cursorLeft:
             textDocumentProxy.adjustTextPosition(byCharacterOffset: -1)
         case .cursorRight:
