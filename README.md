@@ -6,6 +6,10 @@
 
 iOS 嘸蝦米（Boshiamy）鍵盤 — [Yabomish](https://github.com/plateaukao/yabomish) 未發布 iOS 實作的極簡抽出版。純 Swift、零依賴。
 
+<p align="center">
+  <img src="docs/keyboard-dark.jpg" width="400" alt="鍵盤深色主題截圖 — 鍵帽角標、滑動提示與工具列">
+</p>
+
 ## 特色
 
 ### 輸入引擎
