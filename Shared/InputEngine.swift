@@ -405,6 +405,13 @@ final class InputEngine {
         delegate?.engineDidShowToast(_currentModeLabel)
     } }
 
+    /// 直接設定中英模式（啟動時還原上次狀態用；不顯示 toast）
+    func setEnglishMode(_ on: Bool) { sync {
+        guard _isEnglishMode != on else { return }
+        _isEnglishMode = on
+        _resetComposing()
+    } }
+
     func exitZhuyinMode() { sync {
         _exitZhuyinModeImpl()
     } }

@@ -18,10 +18,14 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        SkinSettings.shared.reload()  // 讀取匯入的 cskin 設定（工具列/配色/字級/版面）
         engine = InputEngine()
         engine.delegate = self
         engine.loadTable()
         engine.scheduleBackgroundTasks()
+        // 還原上次使用的語言模式（EN/中文）
+        engine.setEnglishMode(OhMyBiasPrefs.lastEnglishMode)
+        keyboardView.isEnglishMode = engine.isEnglishMode
         setUpViews()
         refreshIdleBar()
     }
@@ -29,7 +33,22 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         keyboardView.needsInputModeSwitchKey = needsInputModeSwitchKey
+        keyboardView.returnKeyLabel = Self.returnLabel(for: textDocumentProxy.returnKeyType)
         keyboardView.reloadKeys()
+    }
+
+    /// Enter 鍵依 host app 的 returnKeyType 顯示（搜尋/前往/送出…）
+    private static func returnLabel(for type: UIReturnKeyType?) -> String {
+        switch type {
+        case .search: return "搜尋"
+        case .go: return "前往"
+        case .send: return "送出"
+        case .done: return "完成"
+        case .next: return "下一個"
+        case .join: return "加入"
+        case .continue: return "繼續"
+        default: return "⏎"
+        }
     }
 
     override func updateViewConstraints() {
@@ -47,6 +66,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func setUpViews() {
+        view.backgroundColor = KeyboardTheme.background
         candidateBar.translatesAutoresizingMaskIntoConstraints = false
         keyboardView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(candidateBar)
@@ -63,6 +83,7 @@ final class KeyboardViewController: UIInputViewController {
         ])
 
         candidateBar.onSelect = { [weak self] idx in self?.didSelectCandidate(at: idx) }
+        candidateBar.onToolbarKey = { [weak self] action in self?.handleKey(action) }
         keyboardView.onKey = { [weak self] action in self?.handleKey(action) }
         keyboardView.onGlobeSetup = { [weak self] button in
             guard let self else { return }
@@ -108,7 +129,10 @@ final class KeyboardViewController: UIInputViewController {
         case .toggleLanguage:
             engine.toggleEnglishMode()
             keyboardView.isEnglishMode = engine.isEnglishMode
+            keyboardView.currentPage = .letters  // 從工具列切換時回到字母頁
             keyboardView.reloadKeys()
+            OhMyBiasPrefs.lastEnglishMode = engine.isEnglishMode
+            refreshIdleBar()
         case .page(let page):
             keyboardView.currentPage = page
             keyboardView.reloadKeys()
@@ -123,7 +147,56 @@ final class KeyboardViewController: UIInputViewController {
             engine.exitZhuyinMode()
             keyboardView.currentPage = .letters
             keyboardView.reloadKeys()
+        case .selectCandidateShortcut(let idx):
+            // 次選/三選上屏（sweetlime n/m 上滑）— 無候選時不動作
+            if engine.currentCandidates.count > idx { didSelectCandidate(at: idx) }
+        case .lineStart:
+            let count = textDocumentProxy.documentContextBeforeInput?.count ?? 0
+            if count > 0 { textDocumentProxy.adjustTextPosition(byCharacterOffset: -count) }
+        case .lineEnd:
+            let count = textDocumentProxy.documentContextAfterInput?.count ?? 0
+            if count > 0 { textDocumentProxy.adjustTextPosition(byCharacterOffset: count) }
+        case .pasteClipboard:
+            engine.handleEscape()
+            if let text = ClipboardProcessor.plainText(), !text.isEmpty {
+                textDocumentProxy.insertText(text)
+            } else {
+                showToast("剪貼簿為空", duration: 1.2)
+            }
+        case .tab:
+            engine.handleEscape()
+            textDocumentProxy.insertText("\t")
+        case .enterZhuyin:
+            engine.switchToMode("zh")
+            keyboardView.currentPage = .zhuyin
+            keyboardView.reloadKeys()
+        case .cursorLeft:
+            textDocumentProxy.adjustTextPosition(byCharacterOffset: -1)
+        case .cursorRight:
+            textDocumentProxy.adjustTextPosition(byCharacterOffset: 1)
+        case .dismissKeyboard:
+            dismissKeyboard()
+        case .openSettings:
+            openContainerApp()
         }
+    }
+
+    /// 開啟容器 app 的設定畫面。鍵盤 extension 編譯期擋掉 UIApplication.shared，
+    /// 但 responder chain 上的 UIApplication 實體存在 — 以 objc selector 呼叫 openURL:。
+    /// （extensionContext.open 對鍵盤 extension 常不回呼 completion，只當備援）
+    private func openContainerApp() {
+        guard let url = URL(string: "ohmybias://settings") else { return }
+        let selector = sel_registerName("openURL:")
+        var responder: UIResponder? = self.next
+        while let r = responder {
+            if r.responds(to: selector) {
+                r.perform(selector, with: url)
+                return
+            }
+            responder = r.next
+        }
+        extensionContext?.open(url)
+        showToast("無法開啟設定 — 請從主畫面開啟 OhMyBias 米", duration: 1.5)
     }
 
     private func handleLetterKey(_ ch: String) {
@@ -194,7 +267,7 @@ final class KeyboardViewController: UIInputViewController {
     private func refreshIdleBar() {
         candidateBar.setComposing("")
         candidateBar.setCandidates([], suggestions: false)
-        candidateBar.setIdleLabel(engine.currentModeLabel)
+        candidateBar.setEnglishMode(engine.isEnglishMode)
     }
 
     // MARK: - Zhuyin page sync

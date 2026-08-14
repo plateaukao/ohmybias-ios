@@ -152,6 +152,49 @@ func testEngineModeSwitch() {
     checkEqual(engine.inputMode, .t, "switchToMode back to 繁中")
 }
 
+func testEngineSetEnglishMode() {
+    let (engine, mock) = makeEngine()
+    check(!engine.isEnglishMode, "初始為中文模式")
+    engine.setEnglishMode(true)
+    check(engine.isEnglishMode, "setEnglishMode(true) 進入英文模式")
+    check(mock.toasts.isEmpty, "還原模式不顯示 toast")
+    engine.setEnglishMode(true)
+    check(engine.isEnglishMode, "重複設定為冪等")
+    engine.setEnglishMode(false)
+    check(!engine.isEnglishMode, "setEnglishMode(false) 回中文模式")
+    engine.toggleEnglishMode()
+    check(engine.isEnglishMode, "toggle 後為英文")
+    checkEqual(mock.toasts.last, "A", "toggle 顯示模式 toast")
+}
+
+func testSkinSettingsParse() {
+    let json = """
+    {"skinInfo": {"name": "蝦米輸入法", "author": "Ryan"},
+     "toolbar": {"toolbarButtons": [1, 3, 9, 7, 16, 17, 8, 10, 13, 2]},
+     "layout": {"keyboardLayout": "row", "spaceKeyLayout": "2", "longPressLayout": "1"},
+     "swipe": {"globalEnabledFeatures": ["swipeUp", "longPress"]},
+     "globalSettings": {"palette": {"light": {"bg": "#FFFFFFFF", "borderSize": 2},
+                                    "dark": {"bg": "#000000FF"}},
+                        "groups": {"lowercaseSize": 25}}}
+    """.data(using: .utf8)!
+    let skin = SkinSettings.shared
+    skin.apply(jsonData: json)
+    checkEqual(skin.skinName, "蝦米輸入法", "skinInfo.name")
+    checkEqual(skin.toolbarButtons, [1, 3, 9, 7, 16, 17, 8, 10, 13, 2], "toolbarButtons")
+    checkEqual(skin.keyboardLayout, "row", "keyboardLayout")
+    checkEqual(skin.spaceKeyLayout, "2", "spaceKeyLayout")
+    checkEqual(skin.longPressLayout, "1", "longPressLayout")
+    check(skin.swipeUpEnabled && !skin.swipeDownEnabled, "swipe 全域開關")
+    check(skin.longPressEnabled && !skin.showSwipeUpText, "longPress 開、角標關")
+    checkEqual(skin.colorHex("bg", dark: false), "#FFFFFFFF", "light palette")
+    checkEqual(skin.colorHex("bg", dark: true), "#000000FF", "dark palette")
+    checkEqual(skin.paletteNumber("borderSize", dark: false), 2, "palette 數值")
+    checkEqual(skin.fontSize("lowercaseSize", default: 23), 25, "字級 groups")
+    checkEqual(skin.fontSize("systemSize", default: 16), 16, "字級 fallback")
+    skin.reload()  // 還原預設，避免影響其他測試
+    checkEqual(skin.toolbarButtons, SkinSettings.defaultToolbarButtons, "reload 還原內建預設")
+}
+
 // === 聯想（基本詞組）tests ===
 
 func testWikiCorpusPhrases() {
@@ -204,6 +247,8 @@ testEngineVRSF()
 testEnginePunctuationPairing()
 testEngineCommaCommandUnknown()
 testEngineModeSwitch()
+testEngineSetEnglishMode()
+testSkinSettingsParse()
 testWikiCorpusPhrases()
 testSuggestionEngineBasic()
 testEngineSuggestFlow()

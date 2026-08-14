@@ -5,6 +5,9 @@ struct ContentView: View {
     @State private var showImporter = false
     @State private var tableStatus = ""
     @State private var importMessage: String?
+    @State private var showSkinImporter = false
+    @State private var skinStatus = ""
+    @State private var skinMessage: String?
 
     @AppStorage("suggestEnabled", store: OhMyBiasPrefs.defaults) private var suggestEnabled = true
     @AppStorage("autoCommit", store: OhMyBiasPrefs.defaults) private var autoCommit = false
@@ -38,6 +41,17 @@ struct ContentView: View {
                     }
                     Button("匯入 liu.cin") { showImporter = true }
                     if let msg = importMessage {
+                        Text(msg).font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("皮膚") {
+                    Text(skinStatus).font(.footnote)
+                    Button("匯入皮膚（.cskin）") { showSkinImporter = true }
+                    if SkinSettings.shared.isImported {
+                        Button("還原內建皮膚", role: .destructive) { resetSkin() }
+                    }
+                    if let msg = skinMessage {
                         Text(msg).font(.footnote).foregroundStyle(.secondary)
                     }
                 }
@@ -85,7 +99,53 @@ struct ContentView: View {
                       allowsMultipleSelection: false) { result in
             handleImport(result)
         }
-        .onAppear(perform: refreshTableStatus)
+        .fileImporter(isPresented: $showSkinImporter,
+                      allowedContentTypes: [UTType(filenameExtension: "cskin") ?? .zip, .zip, .data],
+                      allowsMultipleSelection: false) { result in
+            handleSkinImport(result)
+        }
+        .onAppear {
+            refreshTableStatus()
+            refreshSkinStatus()
+        }
+    }
+
+    // MARK: - 皮膚匯入（.cskin = zip，取其中 jsonnet/settings.json 的配置層）
+
+    private func handleSkinImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result, let url = urls.first else { return }
+        let secured = url.startAccessingSecurityScopedResource()
+        defer { if secured { url.stopAccessingSecurityScopedResource() } }
+
+        guard let zipData = try? Data(contentsOf: url) else {
+            skinMessage = "讀取失敗"; return
+        }
+        guard let json = ZipReader.extractFirst(named: "jsonnet/settings.json", from: zipData)
+                ?? ZipReader.extractFirst(named: "settings.json", from: zipData) else {
+            skinMessage = "找不到 settings.json — 請確認是有效的 .cskin 檔"; return
+        }
+        do {
+            try json.write(to: URL(fileURLWithPath: SkinSettings.settingsPath))
+            SkinSettings.shared.reload()
+            skinMessage = SkinSettings.shared.isImported
+                ? "已套用「\(SkinSettings.shared.skinName)」— 重開鍵盤生效"
+                : "settings.json 格式無法解析"
+            refreshSkinStatus()
+        } catch {
+            skinMessage = "匯入失敗：\(error.localizedDescription)"
+        }
+    }
+
+    private func resetSkin() {
+        try? FileManager.default.removeItem(atPath: SkinSettings.settingsPath)
+        SkinSettings.shared.reload()
+        skinMessage = "已還原內建皮膚 — 重開鍵盤生效"
+        refreshSkinStatus()
+    }
+
+    private func refreshSkinStatus() {
+        SkinSettings.shared.reload()
+        skinStatus = "目前皮膚：\(SkinSettings.shared.skinName)"
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {

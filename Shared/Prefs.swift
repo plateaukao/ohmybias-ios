@@ -64,6 +64,12 @@ struct OhMyBiasPrefs {
         set { defaults.set(newValue, forKey: "homophoneMultiReading") }
     }
 
+    /// 上次使用的語言模式（true = 英文）— 鍵盤啟動時還原
+    static var lastEnglishMode: Bool {
+        get { defaults.object(forKey: "lastEnglishMode") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "lastEnglishMode") }
+    }
+
     /// 按鍵觸覺回饋
     static var hapticFeedback: Bool {
         get { defaults.object(forKey: "hapticFeedback") as? Bool ?? true }

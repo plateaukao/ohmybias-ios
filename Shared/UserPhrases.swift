@@ -26,6 +26,11 @@ final class UserPhrases {
         return phrases.prefix(limit).map { String($0.dropFirst()) }
     }
 
+    /// 全部自訂詞（供常用語面板列出）
+    func allPhrases() -> [String] {
+        table.values.flatMap { $0 }.sorted()
+    }
+
     /// Return full phrases starting with `prefix`
     func completions(for prefix: String, limit: Int = 3) -> [String] {
         guard let first = prefix.first, let phrases = table[first] else { return [] }
