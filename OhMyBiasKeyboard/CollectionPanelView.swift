@@ -1,7 +1,7 @@
 import UIKit
 
 /// 分類面板 — sweetlime 符號/Emoji/顏文字鍵盤：左欄分類、右欄格狀內容、底列返回/退格。
-/// 依皮膚設定，面板在深色模式也維持淺底（panelLeftBg/panelRightBg）。
+/// 顏色由 cskin 的 panel 色鍵控制；未設定時跟隨系統深淺色。
 final class CollectionPanelView: UIView {
 
     var onInsert: ((String) -> Void)?
@@ -12,6 +12,7 @@ final class CollectionPanelView: UIView {
     private let itemFontSize: CGFloat
     private var currentSection = 0
     private var categoryButtons: [UIButton] = []
+    private var bottomButtons: [UIButton] = []
     private let categoryScroll = UIScrollView()
     private let categoryStack = UIStackView()
     private var collectionView: UICollectionView!
@@ -102,6 +103,7 @@ final class CollectionPanelView: UIView {
         b.translatesAutoresizingMaskIntoConstraints = false
         b.addTarget(self, action: selector, for: .touchUpInside)
         addSubview(b)
+        bottomButtons.append(b)
         return b
     }
 
@@ -122,6 +124,13 @@ final class CollectionPanelView: UIView {
 
     @objc private func didTapBack() { onBack?() }
     @objc private func didTapBackspace() { onBackspace?() }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        for button in bottomButtons {
+            button.layer.borderColor = KeyboardTheme.systemBorder.resolvedColor(with: traitCollection).cgColor
+        }
+    }
 }
 
 extension CollectionPanelView: UICollectionViewDataSource, UICollectionViewDelegate {
@@ -171,5 +180,12 @@ final class PanelCell: UICollectionViewCell {
 
     override var isHighlighted: Bool {
         didSet { contentView.backgroundColor = isHighlighted ? KeyboardTheme.keyNormalHighlight : .clear }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if isHighlighted {
+            contentView.backgroundColor = KeyboardTheme.keyNormalHighlight
+        }
     }
 }

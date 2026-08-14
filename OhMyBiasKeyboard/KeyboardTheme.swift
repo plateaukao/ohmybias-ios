@@ -63,10 +63,10 @@ enum KeyboardTheme {
     static var candidateSelectedBackground: UIColor { pal("candidateSelectedBg", "#FFFFFF", "#CCCCCC") }
 
     /// 面板（符號/emoji/顏文字）左欄分類、右欄內容
-    static var panelLeftBackground: UIColor { pal("panelLeftBg", "#F0F0F0", "#E5E5E5") }
-    static var panelRightBackground: UIColor { pal("panelRightBg", "#FFFFFF", "#FFFFFF") }
-    static var panelText: UIColor { pal("panelLeftText", "#000000", "#1A1A1A") }
-    static var panelCategoryHighlight: UIColor { pal("panelCategoryHighlight", "#000000", "#1A1A1A") }
+    static var panelLeftBackground: UIColor { pal("panelLeftBg", "#F0F0F0", "#1C1C1E") }
+    static var panelRightBackground: UIColor { pal("panelRightBg", "#FFFFFF", "#000000") }
+    static var panelText: UIColor { pal("panelLeftText", "#000000", "#F2F2F7") }
+    static var panelCategoryHighlight: UIColor { pal("panelCategoryHighlight", "#000000", "#F2F2F7") }
 
     /// 長按氣泡
     static var bubbleShellBackground: UIColor { pal("bubbleShellBg", "#E9E2E2", "#FFFFFF") }

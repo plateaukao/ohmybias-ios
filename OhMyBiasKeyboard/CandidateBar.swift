@@ -31,6 +31,7 @@ final class CandidateBar: UIView {
     private let stack = UIStackView()
     private let toolbarStack = UIStackView()
     private var languageButton: UIButton?
+    private var toolbarHostingControllers: [UIViewController] = []
 
     /// 工具列項目：由 cskin 的 toolbarButtons 按鈕 ID 對應而來
     private struct ToolbarItem {
@@ -107,6 +108,7 @@ final class CandidateBar: UIView {
             if case .openSettings = item.action {
                 let host = UIHostingController(rootView: SettingsLinkView())
                 host.view.backgroundColor = .clear
+                toolbarHostingControllers.append(host)
                 toolbarStack.addArrangedSubview(host.view)
                 continue
             }
@@ -148,6 +150,26 @@ final class CandidateBar: UIView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard let parent = parentViewController else { return }
+        for host in toolbarHostingControllers where host.parent == nil {
+            parent.addChild(host)
+            host.didMove(toParent: parent)
+        }
+    }
+
+    private var parentViewController: UIViewController? {
+        var responder: UIResponder? = next
+        while let current = responder {
+            if let controller = current as? UIViewController {
+                return controller
+            }
+            responder = current.next
+        }
+        return nil
+    }
 
     /// 空閒（無組字、無候選）才顯示工具列；候選捲動區與其互斥
     private func updateToolbarVisibility() {

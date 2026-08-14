@@ -311,6 +311,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = OhMyBiasApp/OhMyBias.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3WD42GF27D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = OhMyBiasApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -327,6 +328,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = OhMyBiasApp/OhMyBias.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3WD42GF27D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = OhMyBiasApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -344,6 +346,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = OhMyBiasKeyboard/OhMyBiasKeyboard.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3WD42GF27D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = OhMyBiasKeyboard/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
@@ -362,6 +365,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = OhMyBiasKeyboard/OhMyBiasKeyboard.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3WD42GF27D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = OhMyBiasKeyboard/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
