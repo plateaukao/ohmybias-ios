@@ -43,6 +43,7 @@ final class KeyboardView: UIView {
     var returnKeyLabel = "⏎"
 
     private let rowsStack = UIStackView()
+    private var keyButtons: [KeyButton] = []
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -67,6 +68,7 @@ final class KeyboardView: UIView {
 
     func reloadKeys() {
         rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        keyButtons.removeAll()
         panelView?.removeFromSuperview()
         panelView = nil
         rowsStack.isHidden = false
@@ -96,7 +98,7 @@ final class KeyboardView: UIView {
         }
 
         var previousUnitRef: KeyButton?  // 上一排的單位寬鍵（跨排對齊基準）
-        for row in rows {
+        for (rowIndex, row) in rows.enumerated() {
             let rowStack = UIStackView()
             rowStack.axis = .horizontal
             rowStack.spacing = 5
@@ -105,12 +107,31 @@ final class KeyboardView: UIView {
                 let b = makeKey(spec)
                 rowStack.addArrangedSubview(b)
                 buttons.append(b)
+                keyButtons.append(b)
             }
             let unitRef = buttons.first { $0.spec.widthMultiplier == 1 && !isSpaceKey($0.spec) }
             // 先掛進視圖樹再 activate 約束 — 跨排約束需要 common ancestor
             rowsStack.addArrangedSubview(rowStack)
 
-            if row.contains(where: isSpaceKey) {
+            if currentPage == .letters, rowIndex == 1, let ref = previousUnitRef {
+                // 第二列（a–l）使用第一列的單鍵寬度。兩端各補半格，
+                // 使按鍵中心相對首列左右各內縮半個鍵距。
+                let leadingSpacer = UIView()
+                let trailingSpacer = UIView()
+                rowStack.insertArrangedSubview(leadingSpacer, at: 0)
+                rowStack.addArrangedSubview(trailingSpacer)
+                let spacerWidth = ref.widthAnchor.constraint(
+                    equalTo: leadingSpacer.widthAnchor,
+                    multiplier: 2,
+                    constant: rowStack.spacing
+                )
+                spacerWidth.isActive = true
+                trailingSpacer.widthAnchor.constraint(equalTo: leadingSpacer.widthAnchor).isActive = true
+                rowStack.distribution = .fill
+                for b in buttons {
+                    b.widthAnchor.constraint(equalTo: ref.widthAnchor).isActive = true
+                }
+            } else if row.contains(where: isSpaceKey) {
                 // 有空白鍵的排：其他鍵對齊「上一排」的單位寬（123/⏎ = shift 寬、
                 // 逗號句號 = 字母鍵寬），空白鍵彈性吃掉全部剩餘寬度
                 rowStack.distribution = .fill
@@ -132,6 +153,30 @@ final class KeyboardView: UIView {
             }
             if let ref = unitRef { previousUnitRef = ref }
         }
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hitView = super.hitTest(point, with: event)
+        if hitView is KeyButton || panelView != nil {
+            return hitView
+        }
+
+        // 按鍵間距也屬於相鄰按鍵的可點區域；以距離中點平均劃分。
+        let frames = keyButtons.map { ($0, $0.convert($0.bounds, to: self)) }
+        guard let minX = frames.map({ $0.1.minX }).min(),
+              let maxX = frames.map({ $0.1.maxX }).max(),
+              let minY = frames.map({ $0.1.minY }).min(),
+              let maxY = frames.map({ $0.1.maxY }).max(),
+              point.x >= minX, point.x <= maxX, point.y >= minY, point.y <= maxY else {
+            return hitView
+        }
+        return frames.min(by: { squaredDistance(from: point, to: $0.1) < squaredDistance(from: point, to: $1.1) })?.0
+    }
+
+    private func squaredDistance(from point: CGPoint, to frame: CGRect) -> CGFloat {
+        let dx = max(frame.minX - point.x, 0, point.x - frame.maxX)
+        let dy = max(frame.minY - point.y, 0, point.y - frame.maxY)
+        return dx * dx + dy * dy
     }
 
     struct KeySpec {

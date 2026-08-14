@@ -32,6 +32,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        applyToolbarBackground()
         keyboardView.needsInputModeSwitchKey = needsInputModeSwitchKey
         keyboardView.returnKeyLabel = Self.returnLabel(for: textDocumentProxy.returnKeyType)
         keyboardView.reloadKeys()
@@ -66,7 +67,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func setUpViews() {
-        view.backgroundColor = KeyboardTheme.background
+        applyToolbarBackground()
         candidateBar.translatesAutoresizingMaskIntoConstraints = false
         keyboardView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(candidateBar)
@@ -105,6 +106,14 @@ final class KeyboardViewController: UIInputViewController {
             toastLabel.centerYAnchor.constraint(equalTo: keyboardView.centerYAnchor),
             toastLabel.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, constant: -32),
         ])
+    }
+
+    private func applyToolbarBackground() {
+        // iOS 將 extension 的 view 包在有上方圓角的 input view；兩者都要著色，
+        // 才不會讓工具列上方露出系統預設的鍵盤背景。
+        view.backgroundColor = KeyboardTheme.toolbarBackground
+        inputView?.backgroundColor = KeyboardTheme.toolbarBackground
+        view.superview?.backgroundColor = KeyboardTheme.toolbarBackground
     }
 
     // MARK: - Key handling
