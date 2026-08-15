@@ -39,19 +39,53 @@ enum KeyboardTheme {
                        blue: CGFloat(v & 0xFF) / 255, alpha: a)
     }
 
+    /// iOS 27 液態玻璃：系統背板是透明玻璃，鍵盤/工具列背景不再自畫（交給系統）。
+    static var glassHost: Bool {
+        if #available(iOS 27.0, *) { return true }
+        return false
+    }
+
+    /// 皮膚鍵面色常帶 alpha（設計上假設疊在不透明背景上），直接放上玻璃會成鬼影 —
+    /// 玻璃模式下以皮膚工具列/鍵盤背景為底壓成不透明，視覺等同舊版疊色結果；
+    /// 鍵與鍵之間的空隙留給系統玻璃。非玻璃模式原樣回傳。
+    private static func solid(_ color: UIColor) -> UIColor {
+        guard glassHost else { return color }
+        let base = toolbarBackground
+        return UIColor { traits in
+            func rgba(_ c: UIColor) -> (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
+                var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                c.resolvedColor(with: traits).getRed(&r, green: &g, blue: &b, alpha: &a)
+                return (r, g, b, a)
+            }
+            // 底色自身也可能帶 alpha → 先壓在純白/純黑地上
+            let dark = UIScreen.main.traitCollection.userInterfaceStyle == .unspecified
+                ? traits.userInterfaceStyle == .dark
+                : UIScreen.main.traitCollection.userInterfaceStyle == .dark
+            let ground: CGFloat = dark ? 0 : 1
+            let b = rgba(base)
+            let gr = b.r * b.a + ground * (1 - b.a)
+            let gg = b.g * b.a + ground * (1 - b.a)
+            let gb = b.b * b.a + ground * (1 - b.a)
+            let t = rgba(color)
+            return UIColor(red: t.r * t.a + gr * (1 - t.a),
+                           green: t.g * t.a + gg * (1 - t.a),
+                           blue: t.b * t.a + gb * (1 - t.a), alpha: 1)
+        }
+    }
+
     // MARK: - 調色盤（palette key 同 cskin settings.json globalSettings.palette）
 
     /// 鍵盤整體背景
     static var background: UIColor { pal("bg", "#FFFFFF", "#000000") }
-    /// 一般鍵背景／按下
-    static var keyNormal: UIColor { pal("keyNormal", "#FFFFFF", "#000000") }
-    static var keyNormalHighlight: UIColor { pal("keyNormalHighlight", "#EBEBEB", "#1A1A1A") }
+    /// 一般鍵背景／按下（玻璃模式壓成不透明 — 鍵面必須是實色）
+    static var keyNormal: UIColor { solid(pal("keyNormal", "#FFFFFF", "#000000")) }
+    static var keyNormalHighlight: UIColor { solid(pal("keyNormalHighlight", "#EBEBEB", "#1A1A1A")) }
     /// 功能鍵（shift、⌫、123…）背景／按下 — 深色模式反白
-    static var keySystem: UIColor { pal("keySystem", "#D6D6D696", "#CCCCCC") }
-    static var keySystemHighlight: UIColor { pal("keySystemHighlight", "#C7C7C7", "#BBBBBB") }
+    static var keySystem: UIColor { solid(pal("keySystem", "#D6D6D696", "#CCCCCC")) }
+    static var keySystemHighlight: UIColor { solid(pal("keySystemHighlight", "#C7C7C7", "#BBBBBB")) }
     /// Enter 鍵
-    static var keyEnter: UIColor { pal("keyEnter", "#FFFFFF", "#CCCCCC") }
-    static var keyEnterHighlight: UIColor { pal("keyEnterHighlight", "#C7C7C7", "#BBBBBB") }
+    static var keyEnter: UIColor { solid(pal("keyEnter", "#FFFFFF", "#CCCCCC")) }
+    static var keyEnterHighlight: UIColor { solid(pal("keyEnterHighlight", "#C7C7C7", "#BBBBBB")) }
     /// 主文字
     static var textMain: UIColor { pal("textMain", "#000000", "#BBBBBB") }
     /// 角標提示文字（上滑/下滑符號）
@@ -75,20 +109,20 @@ enum KeyboardTheme {
     /// 候選列
     static var candidateText: UIColor { pal("candidateUnselectedText", "#000000", "#CCCCCC") }
     static var candidateSelectedText: UIColor { pal("candidateSelectedText", "#000000", "#000000") }
-    static var candidateSelectedBackground: UIColor { pal("candidateSelectedBg", "#FFFFFF", "#CCCCCC") }
+    static var candidateSelectedBackground: UIColor { solid(pal("candidateSelectedBg", "#FFFFFF", "#CCCCCC")) }
 
     /// 面板（符號/emoji/顏文字）左欄分類、右欄內容（缺鍵時鏈回皮膚相容色）。
     /// 分類標籤是小型導覽文字 → 鏈回皮膚的高對比 textSub（textMain 可能是半透明鍵面字色）；
     /// 選中分類用皮膚保證成對的 candidateSelected 前景/背景。
-    static var panelLeftBackground: UIColor { pal("panelLeftBg", "#F0F0F0", "#1C1C1E") }
-    static var panelRightBackground: UIColor { pal("panelRightBg", "#FFFFFF", "#000000") }
+    static var panelLeftBackground: UIColor { solid(pal("panelLeftBg", "#F0F0F0", "#1C1C1E")) }
+    static var panelRightBackground: UIColor { solid(pal("panelRightBg", "#FFFFFF", "#000000")) }
     static var panelText: UIColor { pal(["panelLeftText", "textSub"], "#000000", "#F2F2F7") }
-    static var panelCategoryHighlight: UIColor { pal(["panelCategoryHighlight", "candidateSelectedBg"], "#000000", "#F2F2F7") }
+    static var panelCategoryHighlight: UIColor { solid(pal(["panelCategoryHighlight", "candidateSelectedBg"], "#000000", "#F2F2F7")) }
     static var panelCategorySelectedText: UIColor { pal(["panelCategorySelectedText", "candidateSelectedText"], "#F0F0F0", "#1C1C1E") }
 
     /// 長按氣泡（殼/選中底未定義時鏈回皮膚的功能鍵色，避免與氣泡文字撞色）
-    static var bubbleShellBackground: UIColor { pal(["bubbleShellBg", "keySystemHighlight"], "#E9E2E2", "#FFFFFF") }
-    static var bubbleSelectedBackground: UIColor { pal(["bubbleSelectedBg", "keySystem"], "#000000", "#1A1A1A") }
+    static var bubbleShellBackground: UIColor { solid(pal(["bubbleShellBg", "keySystemHighlight"], "#E9E2E2", "#FFFFFF")) }
+    static var bubbleSelectedBackground: UIColor { solid(pal(["bubbleSelectedBg", "keySystem"], "#000000", "#1A1A1A")) }
     static var bubbleTextSelected: UIColor { pal("bubbleTextSelected", "#FFFFFF", "#FFFFFF") }
     static var bubbleTextUnselected: UIColor { pal("bubbleTextUnselected", "#000000", "#1A1A1A") }
 

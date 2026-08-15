@@ -115,6 +115,13 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func applyToolbarBackground() {
+        // iOS 27 液態玻璃：背板交給系統玻璃，不自畫鍵盤/工具列背景 —
+        // 鍵面與內容色已在 KeyboardTheme 壓成不透明，玻璃只透出鍵外空隙
+        if KeyboardTheme.glassHost {
+            view.backgroundColor = .clear
+            inputView?.backgroundColor = .clear
+            return
+        }
         // iOS 將 extension 的 view 包在稍後才掛載的、有上方圓角的 input-host；
         // 從 extension view 一路著色至 window，避免露出系統預設鍵盤背景。
         let color = KeyboardTheme.toolbarBackground

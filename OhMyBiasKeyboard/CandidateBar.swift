@@ -75,7 +75,8 @@ final class CandidateBar: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = KeyboardTheme.toolbarBackground
+        // 玻璃模式：工具列背景交給系統玻璃，只保留按鈕與文字內容
+        backgroundColor = KeyboardTheme.glassHost ? .clear : KeyboardTheme.toolbarBackground
 
         composingLabel.font = .monospacedSystemFont(ofSize: 15, weight: .medium)
         composingLabel.textColor = KeyboardTheme.textSub
