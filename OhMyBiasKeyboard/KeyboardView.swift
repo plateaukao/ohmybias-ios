@@ -122,7 +122,10 @@ final class KeyboardView: UIView {
         case .symbolPanel:
             installPanel(CollectionData.symbols, fontSize: KeyboardTheme.panelSymbolFontSize); return
         case .emoji:
-            installPanel(CollectionData.emojis, fontSize: KeyboardTheme.panelEmojiFontSize); return
+            // 「常用」分類 = 最近使用紀錄，排在「表情」前；沒紀錄就不顯示
+            let recent = RecentEmojis.shared.all()
+            let sections = recent.isEmpty ? CollectionData.emojis : [("常用", recent)] + CollectionData.emojis
+            installPanel(sections, fontSize: KeyboardTheme.panelEmojiFontSize, recordRecent: true); return
         case .kaomojis:
             installPanel(CollectionData.kaomojis, fontSize: KeyboardTheme.panelKaomojiFontSize); return
         case .phrases:
@@ -348,11 +351,14 @@ final class KeyboardView: UIView {
 
     private var panelView: CollectionPanelView?
 
-    private func installPanel(_ sections: [(String, [String])], fontSize: CGFloat) {
+    private func installPanel(_ sections: [(String, [String])], fontSize: CGFloat, recordRecent: Bool = false) {
         guard MemoryBudget.canAfford(MemoryBudget.collectionPanel) else { return }
         rowsStack.isHidden = true
         let panel = CollectionPanelView(sections: sections, itemFontSize: fontSize)
-        panel.onInsert = { [weak self] text in self?.onKey?(.symbol(text)) }
+        panel.onInsert = { [weak self] text in
+            if recordRecent { RecentEmojis.shared.record(text) }
+            self?.onKey?(.symbol(text))
+        }
         panel.onBack = { [weak self] in self?.onKey?(.page(.letters)) }
         panel.onBackspace = { [weak self] in self?.onKey?(.backspace) }
         panel.translatesAutoresizingMaskIntoConstraints = false

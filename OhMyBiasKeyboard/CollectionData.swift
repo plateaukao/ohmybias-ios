@@ -1,7 +1,8 @@
 import Foundation
 
 /// 面板頁資料（符號/顏文字/Emoji）— 由 sweetlime 皮膚 collectionData.libsonnet 轉出。
-/// 產生方式見 scratchpad gen_collection.py；「常用」分類在 Hamster 為動態使用紀錄，不移植。
+/// 產生方式見 scratchpad gen_collection.py；「常用」分類為動態使用紀錄，
+/// 表情面板由 RecentEmojis 提供，不在此靜態表內。
 enum CollectionData {
 
     static let symbols: [(String, [String])] = [
