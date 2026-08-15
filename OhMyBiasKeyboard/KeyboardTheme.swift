@@ -77,11 +77,14 @@ enum KeyboardTheme {
     static var candidateSelectedText: UIColor { pal("candidateSelectedText", "#000000", "#000000") }
     static var candidateSelectedBackground: UIColor { pal("candidateSelectedBg", "#FFFFFF", "#CCCCCC") }
 
-    /// 面板（符號/emoji/顏文字）左欄分類、右欄內容（缺鍵時鏈回皮膚相容色）
+    /// 面板（符號/emoji/顏文字）左欄分類、右欄內容（缺鍵時鏈回皮膚相容色）。
+    /// 分類標籤是小型導覽文字 → 鏈回皮膚的高對比 textSub（textMain 可能是半透明鍵面字色）；
+    /// 選中分類用皮膚保證成對的 candidateSelected 前景/背景。
     static var panelLeftBackground: UIColor { pal("panelLeftBg", "#F0F0F0", "#1C1C1E") }
     static var panelRightBackground: UIColor { pal("panelRightBg", "#FFFFFF", "#000000") }
-    static var panelText: UIColor { pal(["panelLeftText", "textMain"], "#000000", "#F2F2F7") }
-    static var panelCategoryHighlight: UIColor { pal(["panelCategoryHighlight", "textMain"], "#000000", "#F2F2F7") }
+    static var panelText: UIColor { pal(["panelLeftText", "textSub"], "#000000", "#F2F2F7") }
+    static var panelCategoryHighlight: UIColor { pal(["panelCategoryHighlight", "candidateSelectedBg"], "#000000", "#F2F2F7") }
+    static var panelCategorySelectedText: UIColor { pal(["panelCategorySelectedText", "candidateSelectedText"], "#F0F0F0", "#1C1C1E") }
 
     /// 長按氣泡（殼/選中底未定義時鏈回皮膚的功能鍵色，避免與氣泡文字撞色）
     static var bubbleShellBackground: UIColor { pal(["bubbleShellBg", "keySystemHighlight"], "#E9E2E2", "#FFFFFF") }

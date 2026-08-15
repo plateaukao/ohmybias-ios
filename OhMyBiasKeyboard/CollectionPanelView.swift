@@ -111,7 +111,7 @@ final class CollectionPanelView: UIView {
         for (i, b) in categoryButtons.enumerated() {
             let selected = i == currentSection
             b.backgroundColor = selected ? KeyboardTheme.panelCategoryHighlight : .clear
-            b.setTitleColor(selected ? KeyboardTheme.panelLeftBackground : KeyboardTheme.panelText, for: .normal)
+            b.setTitleColor(selected ? KeyboardTheme.panelCategorySelectedText : KeyboardTheme.panelText, for: .normal)
         }
     }
 
