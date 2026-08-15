@@ -60,7 +60,8 @@ final class KeyboardViewController: UIInputViewController {
     override func updateViewConstraints() {
         super.updateViewConstraints()
         let isLandscape = view.bounds.width > 500
-        let height: CGFloat = (isLandscape ? 180 : 224) + CandidateBar.barHeight
+        let height = CGFloat(isLandscape ? 180 : 224) * CGFloat(OhMyBiasPrefs.keyboardHeightScale)
+            + CandidateBar.barHeight
         if let c = heightConstraint {
             c.constant = height
         } else {

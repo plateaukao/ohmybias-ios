@@ -76,6 +76,12 @@ struct OhMyBiasPrefs {
         set { defaults.set(newValue, forKey: "hapticFeedback") }
     }
 
+    /// 鍵盤高度縮放（0.85–1.40；1.0 = 預設 224pt/180pt）— 大螢幕手機可調大（同 Android 版）
+    static var keyboardHeightScale: Double {
+        get { min(max(defaults.object(forKey: "keyboardHeightScale") as? Double ?? 1.0, 0.85), 1.4) }
+        set { defaults.set(min(max(newValue, 0.85), 1.4), forKey: "keyboardHeightScale") }
+    }
+
     /// Debug 記錄至 sharedDir/debug.log
     static var debugMode: Bool {
         get { defaults.object(forKey: "debugMode") as? Bool ?? false }

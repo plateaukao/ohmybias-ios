@@ -16,6 +16,7 @@ struct ContentView: View {
     @AppStorage("punctuationPairing", store: OhMyBiasPrefs.defaults) private var punctuationPairing = true
     @AppStorage("hapticFeedback", store: OhMyBiasPrefs.defaults) private var hapticFeedback = true
     @AppStorage("homophoneMultiReading", store: OhMyBiasPrefs.defaults) private var homophoneMultiReading = false
+    @AppStorage("keyboardHeightScale", store: OhMyBiasPrefs.defaults) private var keyboardHeightScale = 1.0
     @AppStorage("debugMode", store: OhMyBiasPrefs.defaults) private var debugMode = false
 
     var body: some View {
@@ -70,6 +71,13 @@ struct ContentView: View {
                     Toggle("成對標點自動補右半", isOn: $punctuationPairing)
                     Toggle("按鍵觸覺回饋", isOn: $hapticFeedback)
                     Toggle("同音字含罕見讀音", isOn: $homophoneMultiReading)
+                    // 鍵盤高度滑桿（大螢幕手機可調大；重開鍵盤生效）— 同 Android 版
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("鍵盤高度：\(Int((keyboardHeightScale * 100).rounded()))%（85–140，重開鍵盤生效）")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Slider(value: $keyboardHeightScale, in: 0.85...1.40, step: 0.01)
+                    }
                 }
 
                 Section("指令速查") {
