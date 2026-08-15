@@ -1,6 +1,9 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// 皮膚設計器網站（plateaukao/ohmybias-skin — 匯出 .cskin 後回本頁匯入）
+private let skinDesignerURL = URL(string: "https://plateaukao.github.io/ohmybias-skin/")!
+
 struct ContentView: View {
     @State private var showImporter = false
     @State private var tableStatus = ""
@@ -8,6 +11,9 @@ struct ContentView: View {
     @State private var showSkinImporter = false
     @State private var skinStatus = ""
     @State private var skinMessage: String?
+    @State private var pendingSkinJSON: Data?
+    @State private var pendingSkinName = ""
+    @State private var showSkinApplyConfirm = false
 
     @AppStorage("suggestEnabled", store: OhMyBiasPrefs.defaults) private var suggestEnabled = true
     @AppStorage("autoCommit", store: OhMyBiasPrefs.defaults) private var autoCommit = false
@@ -48,6 +54,7 @@ struct ContentView: View {
 
                 Section("皮膚") {
                     Text(skinStatus).font(.footnote)
+                    Link("皮膚設計器（網頁）", destination: skinDesignerURL)
                     Button("匯入皮膚（.cskin）") { showSkinImporter = true }
                     if SkinSettings.shared.isImported {
                         Button("還原內建皮膚", role: .destructive) { resetSkin() }
@@ -116,22 +123,32 @@ struct ContentView: View {
             refreshTableStatus()
             refreshSkinStatus()
         }
+        // 檔案 app／瀏覽器點 .cskin 開啟本 app（Info.plist 文件類型宣告）—
+        // 非使用者主動選檔，先顯示皮膚名稱確認再套用（同 Android 版）
+        .onOpenURL { handleOpenedFile($0) }
+        .alert("套用皮膚", isPresented: $showSkinApplyConfirm) {
+            Button("套用") {
+                if let json = pendingSkinJSON { applySkinJSON(json) }
+                pendingSkinJSON = nil
+            }
+            Button("取消", role: .cancel) { pendingSkinJSON = nil }
+        } message: {
+            Text("要套用皮膚「\(pendingSkinName)」嗎？\n（會取代目前的皮膚，重開鍵盤生效）")
+        }
     }
 
     // MARK: - 皮膚匯入（.cskin = zip，取其中 jsonnet/settings.json 的配置層）
 
-    private func handleSkinImport(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result, let url = urls.first else { return }
+    /// 讀出 .cskin（zip）內的 settings.json；非 zip 或缺檔回 nil
+    private func readSkinSettingsJSON(_ url: URL) -> Data? {
         let secured = url.startAccessingSecurityScopedResource()
         defer { if secured { url.stopAccessingSecurityScopedResource() } }
+        guard let zipData = try? Data(contentsOf: url) else { return nil }
+        return ZipReader.extractFirst(named: "jsonnet/settings.json", from: zipData)
+            ?? ZipReader.extractFirst(named: "settings.json", from: zipData)
+    }
 
-        guard let zipData = try? Data(contentsOf: url) else {
-            skinMessage = "讀取失敗"; return
-        }
-        guard let json = ZipReader.extractFirst(named: "jsonnet/settings.json", from: zipData)
-                ?? ZipReader.extractFirst(named: "settings.json", from: zipData) else {
-            skinMessage = "找不到 settings.json — 請確認是有效的 .cskin 檔"; return
-        }
+    private func applySkinJSON(_ json: Data) {
         do {
             try json.write(to: URL(fileURLWithPath: SkinSettings.settingsPath))
             SkinSettings.shared.reload()
@@ -142,6 +159,28 @@ struct ContentView: View {
         } catch {
             skinMessage = "匯入失敗：\(error.localizedDescription)"
         }
+    }
+
+    /// SAF 式選檔匯入：直接套用（使用者已在選檔時表達意圖）
+    private func handleSkinImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result, let url = urls.first else { return }
+        guard let json = readSkinSettingsJSON(url) else {
+            skinMessage = "找不到 settings.json — 請確認是有效的 .cskin 檔"; return
+        }
+        applySkinJSON(json)
+    }
+
+    /// 點 .cskin 檔開啟本 app — 解出皮膚名稱、確認框後才套用
+    private func handleOpenedFile(_ url: URL) {
+        guard url.isFileURL, url.pathExtension.lowercased() == "cskin" else { return }
+        guard let json = readSkinSettingsJSON(url) else {
+            skinMessage = "找不到 settings.json — 請確認是有效的 .cskin 檔"; return
+        }
+        let root = (try? JSONSerialization.jsonObject(with: json)) as? [String: Any]
+        let name = (root?["skinInfo"] as? [String: Any])?["name"] as? String
+        pendingSkinName = (name?.isEmpty == false) ? name! : "未命名皮膚"
+        pendingSkinJSON = json
+        showSkinApplyConfirm = true
     }
 
     private func resetSkin() {
