@@ -240,24 +240,25 @@ final class KeyboardView: UIView {
         row3 += r3.map(key)
         row3.append(KeySpec(label: "⌫", action: .backspace, widthMultiplier: 1.4, isSpecial: true))
 
-        // 底列（sweetlime）：[123] [,] [大空白] [.] [⏎] — 123 縮至與 shift 同寬（單位鍵寬）、
-        // ⏎ 同 ⌫(1.4)；逗號句號寬度依 spaceKeyLayout（'3' 空白最大），其餘全給空白鍵
-        let punctWidth: CGFloat = skin.spaceKeyLayout == "1" ? 1.4 : (skin.spaceKeyLayout == "2" ? 1.2 : 1.0)
-        let spaceWidth = 9.8 - 2.8 - punctWidth * 2 - (needsInputModeSwitchKey ? 1.0 : 0)
+        // 底列（sweetlime）：[123] [🌐] [,] [大空白] [.] [⏎] — 123 縮至與 shift 同寬（單位鍵寬）、
+        // ⏎ 同 ⌫(1.4)。工具列已有 123（按鈕 ID 9/29）時省略底列 123 鍵。
+        // 空白鍵永遠優先：逗號句號固定標準鍵寬（不採皮膚 spaceKeyLayout 放大值），剩餘全給空白鍵
+        let show123Key = !skin.toolbarButtons.contains { $0 == 9 || $0 == 29 }
         let numericPage: Page = skin.keyboardLayout == "row" ? .numbers : .numeric9
-        var row4: [KeySpec] = [
-            KeySpec(label: "123", action: .page(numericPage), isSpecial: true),
-        ]
+        var row4: [KeySpec] = []
+        if show123Key {
+            row4.append(KeySpec(label: "123", action: .page(numericPage), isSpecial: true))
+        }
         if needsInputModeSwitchKey {
             row4.append(KeySpec(label: "🌐", action: .space, widthMultiplier: 1.0, isSpecial: true, isGlobe: true))
         }
-        row4.append(KeySpec(label: ",", action: .letter(","), widthMultiplier: punctWidth,
+        row4.append(KeySpec(label: ",", action: .letter(","),
                             swipeUp: swipeEntry(SwipeData.up[","], up: true),
                             swipeDown: swipeEntry(SwipeData.down[","], up: false),
                             longPress: skin.longPressEnabled ? LongPressData.commaMenu : nil))
-        row4.append(KeySpec(label: "", action: .space, widthMultiplier: spaceWidth,
+        row4.append(KeySpec(label: "", action: .space,
                             swipeUp: swipeEntry(SwipeData.Entry(hint: nil, action: .toggleLanguage), up: true)))
-        row4.append(KeySpec(label: isEnglishMode ? "." : "。", action: .letter("."), widthMultiplier: punctWidth,
+        row4.append(KeySpec(label: isEnglishMode ? "." : "。", action: .letter("."),
                             swipeUp: swipeEntry(SwipeData.up["."], up: true),
                             swipeDown: swipeEntry(SwipeData.down["."], up: false),
                             longPress: skin.longPressEnabled ? LongPressData.periodMenu : nil))
