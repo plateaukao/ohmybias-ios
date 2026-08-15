@@ -33,9 +33,17 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         applyToolbarBackground()
-        keyboardView.needsInputModeSwitchKey = needsInputModeSwitchKey
-        keyboardView.returnKeyLabel = Self.returnLabel(for: textDocumentProxy.returnKeyType)
-        keyboardView.reloadKeys()
+        // 只有鍵面實際會變才重建按鍵（syncSessionState 內比對短路）
+        keyboardView.syncSessionState(
+            needsSwitchKey: needsInputModeSwitchKey,
+            returnLabel: Self.returnLabel(for: textDocumentProxy.returnKeyType)
+        )
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // 收鍵盤時把未寫入的字頻紀錄落盤 — extension 被殺也不掉學習資料
+        engine.freqTracker.flushAll()
     }
 
     override func viewDidLayoutSubviews() {

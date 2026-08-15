@@ -37,7 +37,11 @@ final class KeyboardView: UIView {
     var onGlobeSetup: ((UIButton) -> Void)?
 
     var currentPage: Page = .letters
-    var isEnglishMode = false
+    /// 中英切換改變第三排前導鍵（英/⇧）與標點 — 變更時就地重建，
+    /// 不再依賴 viewWillAppear 的無條件 reloadKeys 事後修正
+    var isEnglishMode = false {
+        didSet { if isEnglishMode != oldValue { reloadKeys() } }
+    }
     var isShifted = false
     var needsInputModeSwitchKey = true
     /// Enter 鍵顯示文字（依 host app 的 returnKeyType：搜尋/前往/送出…）
@@ -46,6 +50,8 @@ final class KeyboardView: UIView {
     private let rowsStack = UIStackView()
     private var keyButtons: [KeyButton] = []
     private var pageBeforeToolbarToggle: Page?
+    /// 建鍵時的皮膚世代 — 皮膚重載後才需要重建 KeySpec（滑動開關/版面選項）
+    private var builtSkinGeneration = -1
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -69,8 +75,22 @@ final class KeyboardView: UIView {
     // MARK: - Layout definitions
 
     func showPage(_ page: Page) {
+        if currentPage == page && pageBeforeToolbarToggle == nil { return }  // 同頁免重建
         currentPage = page
         pageBeforeToolbarToggle = nil
+        reloadKeys()
+    }
+
+    /// viewWillAppear 每次鍵盤出現都會呼叫 — 只有鍵面實際會變（🌐 鍵有無、
+    /// Enter 標籤、皮膚重載）才整面重建（取法 sweetlime initOnStartInput 的短路）
+    func syncSessionState(needsSwitchKey: Bool, returnLabel: String) {
+        if needsInputModeSwitchKey == needsSwitchKey && returnKeyLabel == returnLabel
+            && builtSkinGeneration == SkinSettings.shared.generation
+            && currentPage != .phrases {  // 常用語可能在容器 app 被改過 — 回鍵盤時重讀
+            return
+        }
+        needsInputModeSwitchKey = needsSwitchKey
+        returnKeyLabel = returnLabel
         reloadKeys()
     }
 
@@ -86,6 +106,7 @@ final class KeyboardView: UIView {
     }
 
     func reloadKeys() {
+        builtSkinGeneration = SkinSettings.shared.generation
         rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         keyButtons.removeAll()
         panelView?.removeFromSuperview()
@@ -519,14 +540,15 @@ final class KeyButton: UIButton {
         touchStartPoint = touches.first?.location(in: self)
         if case .backspace = spec.action {
             onAction?(.backspace)
-            repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
-                self?.repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { _ in
+            // 連刪節奏同 sweetlime（400ms 起跑、50ms/字 = 20 字/秒）
+            repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: false) { [weak self] _ in
+                self?.repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
                     self?.onAction?(.backspace)
                 }
             }
         }
         if spec.longPress != nil {
-            longPressTimer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: false) { [weak self] _ in
+            longPressTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: false) { [weak self] _ in
                 guard let self else { return }
                 self.isInLongPress = true
                 self.onLongPressBegan?(self)

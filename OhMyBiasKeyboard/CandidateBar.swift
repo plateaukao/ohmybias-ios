@@ -172,42 +172,69 @@ final class CandidateBar: UIView {
         return nil
     }
 
+    /// 上次顯示內容 — 相同就完全不動（每個按鍵/每次切輸入框都會重設候選列）
+    private var lastCandidates: [String] = []
+    private var lastSuggestions = false
+    /// stack 目前作用中的按鈕數（多餘的隱藏備用，取代每鍵擊 removeFromSuperview + 新建）
+    private var activeButtons = 0
+
     /// 空閒（無組字、無候選）才顯示工具列；候選捲動區與其互斥
     private func updateToolbarVisibility() {
-        let idle = (composingLabel.text ?? "").isEmpty && stack.arrangedSubviews.isEmpty
+        let idle = (composingLabel.text ?? "").isEmpty && activeButtons == 0
         toolbarStack.isHidden = !idle
         scrollView.isHidden = idle
     }
 
     func setComposing(_ text: String) {
+        if (composingLabel.text ?? "") == text { return }  // 未變就不重排
         composingLabel.text = text
         updateToolbarVisibility()
     }
 
+    /// 從 stack 取第 index 顆按鈕重用，不夠才建（取代每鍵擊 removeFromSuperview + 新建）
+    private func obtainButton(at index: Int) -> UIButton {
+        while stack.arrangedSubviews.count <= index {
+            let b = UIButton(type: .system)
+            b.titleLabel?.font = .systemFont(ofSize: 20)
+            b.contentEdgeInsets = UIEdgeInsets(top: 4, left: 9, bottom: 4, right: 9)
+            b.layer.cornerRadius = 6
+            b.addTarget(self, action: #selector(didTap(_:)), for: .touchUpInside)
+            stack.addArrangedSubview(b)
+        }
+        let b = stack.arrangedSubviews[index] as! UIButton
+        b.isHidden = false
+        return b
+    }
+
     func setCandidates(_ candidates: [String], suggestions: Bool) {
-        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        // 內容未變就完全不動 — refreshIdleBar 常以空列表重複呼叫
+        if suggestions == lastSuggestions && candidates == lastCandidates { return }
+        lastCandidates = candidates
+        lastSuggestions = suggestions
         scrollView.setContentOffset(.zero, animated: false)
         defer { updateToolbarVisibility() }
 
         // 候選 1–2 個時不顯示數字前綴（與 macOS 版一致的精簡顯示）
         let showIndex = candidates.count > 2 && !suggestions
         for (i, c) in candidates.enumerated() {
-            let b = UIButton(type: .system)
+            let b = obtainButton(at: i)
             let title = showIndex && i < 9 ? "\(i + 1) \(c)" : c
             b.setTitle(title, for: .normal)
-            b.titleLabel?.font = .systemFont(ofSize: 20)
             b.setTitleColor(suggestions ? .systemBlue : KeyboardTheme.candidateText, for: .normal)
-            b.contentEdgeInsets = UIEdgeInsets(top: 4, left: 9, bottom: 4, right: 9)
-            b.layer.cornerRadius = 6
             if i == 0 && !suggestions && candidates.count > 2 {
                 b.setTitleColor(KeyboardTheme.candidateSelectedText, for: .normal)
                 b.backgroundColor = KeyboardTheme.candidateSelectedBackground
                 b.layer.borderWidth = KeyboardTheme.borderWidth
                 b.layer.borderColor = KeyboardTheme.border.resolvedColor(with: traitCollection).cgColor
+            } else {
+                b.backgroundColor = nil
+                b.layer.borderWidth = 0
             }
             b.tag = i
-            b.addTarget(self, action: #selector(didTap(_:)), for: .touchUpInside)
-            stack.addArrangedSubview(b)
+        }
+        activeButtons = candidates.count
+        for j in candidates.count..<stack.arrangedSubviews.count {
+            stack.arrangedSubviews[j].isHidden = true
         }
     }
 

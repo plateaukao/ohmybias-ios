@@ -11,6 +11,9 @@ final class SkinSettings {
     /// 內建預設工具列（sweetlime toolbarButtons，全選(10)位置依使用者決定放 ♥ 常用語(5)）
     static let defaultToolbarButtons = [1, 3, 9, 7, 16, 17, 8, 5, 13, 2]
 
+    /// 設定世代 — reload()/apply() 時遞增；KeyboardTheme 據此判斷解析快取是否過期
+    private(set) var generation = 0
+
     private(set) var skinName = "sweetlime（內建）"
     private(set) var isImported = false
     private(set) var toolbarButtons: [Int] = SkinSettings.defaultToolbarButtons
@@ -31,6 +34,7 @@ final class SkinSettings {
     private init() { reload() }
 
     func reload() {
+        generation += 1
         // 重設為內建預設
         skinName = "sweetlime（內建）"
         isImported = false
@@ -50,6 +54,7 @@ final class SkinSettings {
     /// 新版扁平（toolbarButtons/palette/groups/spaceKeyLayout 直接在頂層、
     /// 滑動與長按開關為 enableSwipeUpActions 等布林）— 新版 cskin 匯出器已改用扁平格式。
     func apply(jsonData: Data) {
+        generation += 1
         guard let root = (try? JSONSerialization.jsonObject(with: jsonData)) as? [String: Any] else { return }
         isImported = true
         if let info = root["skinInfo"] as? [String: Any], let name = info["name"] as? String {

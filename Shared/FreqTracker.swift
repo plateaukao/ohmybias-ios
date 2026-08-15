@@ -1,6 +1,13 @@
 import Foundation
 import SQLite3
 
+/// freq.db SQLite 字頻學習＋`,,PIN` 固定排序（含 iCloud merge）。
+///
+/// 效能（與 Android 版同步的 sweetlime 移植）：freq/bigram/pinned 整份載入記憶體，
+/// 每鍵擊的查詢（sorted/sortedWithContext）純走記憶體 — 不再 bgQueue.sync 打 SQLite，
+/// 學習也立即可見（舊版查詢看不到未滿批次的 pending）。所有 DB 存取集中在 bgQueue，
+/// WAL 照舊。記憶體是即時權威資料、DB 是持久層：decay 兩邊各自套同因子，
+/// 下次啟動自 DB 還原。decay 修剪讓表上限約 5000 列/表，記憶體成本無虞。
 final class FreqTracker {
     private var db: OpaquePointer?
     private let path: String
@@ -10,10 +17,18 @@ final class FreqTracker {
     private var pendingBigram: [(prev: String, char: String)] = []
     private let batchSize = 50
 
+    /// 記憶體快取 — cacheLock 保護（主執行緒讀寫 + bgQueue 載入/重建）
+    private var freqCache: [String: [String: Int]] = [:]
+    private var bigramCache: [String: [String: Int]] = [:]
+    private var pinnedCache: [String: [String]] = [:]
+    private let cacheLock = NSLock()
+    private let loadGroup = DispatchGroup()
+
     private var stmtUpsertFreq: OpaquePointer?
-    private var stmtQueryFreq: OpaquePointer?
     private var stmtUpsertBigram: OpaquePointer?
-    private var stmtQueryBigram: OpaquePointer?
+    private var stmtQueryPinned: OpaquePointer?
+    private var stmtUpsertPinned: OpaquePointer?
+    private var stmtDeletePinned: OpaquePointer?
 
     init() {
         // SQLite DB always in the App Group container (never in iCloud —
@@ -21,27 +36,31 @@ final class FreqTracker {
         let dir = AppConstants.sharedDir
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         self.path = dir + "/freq.db"
-        openDB()
-        migrateFromJSON(dir: dir)
+        // 開檔/遷移/整份載入都在 bgQueue — 不佔鍵盤啟動主執行緒
+        loadGroup.enter()
+        bgQueue.async { [self] in
+            openDB()
+            migrateFromJSON(dir: dir)
+            loadCaches()
+            loadGroup.leave()
+        }
     }
 
     deinit {
         sqlite3_finalize(stmtUpsertFreq)
-        sqlite3_finalize(stmtQueryFreq)
         sqlite3_finalize(stmtUpsertBigram)
-        sqlite3_finalize(stmtQueryBigram)
         sqlite3_finalize(stmtQueryPinned)
         sqlite3_finalize(stmtUpsertPinned)
         sqlite3_finalize(stmtDeletePinned)
         sqlite3_close(db)
     }
 
-    // MARK: - DB Setup
+    /// 首次查詢若早於載入完成則短暫等待（實務上載入遠快於第一個按鍵）
+    private func awaitLoad() {
+        _ = loadGroup.wait(timeout: .now() + .milliseconds(500))
+    }
 
-    private var stmtQueryPinned: OpaquePointer?
-    private var stmtUpsertPinned: OpaquePointer?
-    private var stmtDeletePinned: OpaquePointer?
-    private var pinnedCache: [String: [String]] = [:]
+    // MARK: - DB Setup（bgQueue 專用）
 
     private func openDB() {
         guard sqlite3_open(path, &db) == SQLITE_OK else {
@@ -56,75 +75,140 @@ final class FreqTracker {
         // 預設固定排序（常見同碼字衝突）
         exec("INSERT OR IGNORE INTO pinned(code,chars) VALUES('hj','手乎')")
         prepare("INSERT INTO freq(code,char,n) VALUES(?1,?2,1) ON CONFLICT(code,char) DO UPDATE SET n=n+1", &stmtUpsertFreq)
-        prepare("SELECT char,n FROM freq WHERE code=?1 ORDER BY n DESC", &stmtQueryFreq)
         prepare("INSERT INTO bigram(prev,char,n) VALUES(?1,?2,1) ON CONFLICT(prev,char) DO UPDATE SET n=n+1", &stmtUpsertBigram)
-        prepare("SELECT char,n FROM bigram WHERE prev=?1 ORDER BY n DESC", &stmtQueryBigram)
         prepare("SELECT chars FROM pinned WHERE code=?1", &stmtQueryPinned)
         prepare("INSERT OR REPLACE INTO pinned(code,chars) VALUES(?1,?2)", &stmtUpsertPinned)
         prepare("DELETE FROM pinned WHERE code=?1", &stmtDeletePinned)
-        loadPinnedCache()
     }
 
-    // MARK: - Record
+    /// bgQueue 專用：三表整份讀進記憶體。
+    /// 記憶體此刻只含載入前的即時紀錄（同時也在 pending 排隊）— 疊加 DB 計數即為完整狀態。
+    private func loadCaches() {
+        let f = readCounts("SELECT code,char,n FROM freq")
+        let b = readCounts("SELECT prev,char,n FROM bigram")
+        var p: [String: [String]] = [:]
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, "SELECT code, chars FROM pinned", -1, &stmt, nil) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let code = String(cString: sqlite3_column_text(stmt, 0))
+                let chars = String(cString: sqlite3_column_text(stmt, 1))
+                p[code] = Array(chars).map(String.init)
+            }
+        }
+        sqlite3_finalize(stmt)
+        cacheLock.lock()
+        for (key, m) in f { for (ch, n) in m { freqCache[key, default: [:]][ch, default: 0] += n } }
+        for (key, m) in b { for (ch, n) in m { bigramCache[key, default: [:]][ch, default: 0] += n } }
+        for (k, v) in p where pinnedCache[k] == nil { pinnedCache[k] = v }
+        cacheLock.unlock()
+    }
+
+    /// bgQueue 專用
+    private func readCounts(_ sql: String) -> [String: [String: Int]] {
+        var r: [String: [String: Int]] = [:]
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return r }
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let key = String(cString: sqlite3_column_text(stmt, 0))
+            let ch = String(cString: sqlite3_column_text(stmt, 1))
+            r[key, default: [:]][ch] = Int(sqlite3_column_int(stmt, 2))
+        }
+        sqlite3_finalize(stmt)
+        return r
+    }
+
+    // MARK: - Record（記憶體即時更新，DB 批次寫入丟 bgQueue）
 
     func record(code: String, char: String) {
-        bgQueue.async { [weak self] in
-            guard let self else { return }
-            self.pendingFreq.append((code, char))
-            self.recordCount += 1
-            if self.pendingFreq.count >= self.batchSize { self.flushFreq() }
-            if self.recordCount >= 500 { self.recordCount = 0; self.decay() }
+        var freqRows: [(code: String, char: String)]?
+        var bigramRows: [(prev: String, char: String)]?
+        var doDecay = false
+        cacheLock.lock()
+        freqCache[code, default: [:]][char, default: 0] += 1
+        pendingFreq.append((code, char))
+        recordCount += 1
+        if pendingFreq.count >= batchSize {
+            freqRows = pendingFreq
+            pendingFreq.removeAll(keepingCapacity: true)
+        }
+        if recordCount >= 500 {
+            recordCount = 0
+            doDecay = true
+            decayMemoryLocked(0.9)
+            // decay 前先送出剩餘 pending — DB 端「先加後衰減」與記憶體一致
+            if !pendingFreq.isEmpty { freqRows = (freqRows ?? []) + pendingFreq; pendingFreq.removeAll(keepingCapacity: true) }
+            if !pendingBigram.isEmpty { bigramRows = pendingBigram; pendingBigram.removeAll(keepingCapacity: true) }
+        }
+        cacheLock.unlock()
+        if freqRows != nil || bigramRows != nil || doDecay {
+            bgQueue.async { [self] in
+                if let rows = freqRows { flushRows(rows.map { ($0.code, $0.char) }, stmtUpsertFreq) }
+                if let rows = bigramRows { flushRows(rows.map { ($0.prev, $0.char) }, stmtUpsertBigram) }
+                if doDecay { decayDB(0.9) }
+            }
         }
     }
 
     func recordBigram(prev: String, char: String) {
         guard !prev.isEmpty else { return }
-        bgQueue.async { [weak self] in
-            guard let self else { return }
-            self.pendingBigram.append((prev, char))
-            if self.pendingBigram.count >= self.batchSize { self.flushBigram() }
+        var rows: [(prev: String, char: String)]?
+        cacheLock.lock()
+        bigramCache[prev, default: [:]][char, default: 0] += 1
+        pendingBigram.append((prev, char))
+        if pendingBigram.count >= batchSize {
+            rows = pendingBigram
+            pendingBigram.removeAll(keepingCapacity: true)
+        }
+        cacheLock.unlock()
+        if let rows {
+            bgQueue.async { [self] in flushRows(rows.map { ($0.prev, $0.char) }, stmtUpsertBigram) }
         }
     }
 
     func recordTrigram(prev2: String, prev1: String, char: String) {
         guard !prev2.isEmpty, !prev1.isEmpty else { return }
-        bgQueue.async { [weak self] in
-            guard let self else { return }
-            self.pendingBigram.append((prev2 + "|" + prev1, char))
-            if self.pendingBigram.count >= self.batchSize { self.flushBigram() }
+        recordBigram(prev: prev2 + "|" + prev1, char: char)
+    }
+
+    /// bgQueue 專用
+    private func flushRows(_ rows: [(String, String)], _ stmt: OpaquePointer?) {
+        guard !rows.isEmpty else { return }
+        exec("BEGIN")
+        for (key, char) in rows { bindAndStep(stmt, key, char) }
+        exec("COMMIT")
+    }
+
+    /// 送出所有未寫入紀錄並等待完成 — 鍵盤收起/extension 結束前呼叫，保住學習資料
+    func flushAll() {
+        cacheLock.lock()
+        let f = pendingFreq; pendingFreq.removeAll(keepingCapacity: true)
+        let b = pendingBigram; pendingBigram.removeAll(keepingCapacity: true)
+        cacheLock.unlock()
+        // 即使 pending 為空也要 sync 一次 — 排入 bgQueue 但尚未執行的批次寫入得以排空
+        bgQueue.sync { [self] in
+            flushRows(f.map { ($0.code, $0.char) }, stmtUpsertFreq)
+            flushRows(b.map { ($0.prev, $0.char) }, stmtUpsertBigram)
         }
     }
 
-    /// Must be called on bgQueue
-    private func flushFreq() {
-        guard !pendingFreq.isEmpty else { return }
-        exec("BEGIN")
-        for (code, char) in pendingFreq { bindAndStep(stmtUpsertFreq, code, char) }
-        exec("COMMIT")
-        pendingFreq.removeAll(keepingCapacity: true)
+    // MARK: - Query（純記憶體 — 每鍵擊皆呼叫，不碰 SQLite）
+
+    private func memFreq(_ code: String) -> [String: Int] {
+        awaitLoad()
+        cacheLock.lock(); defer { cacheLock.unlock() }
+        return freqCache[code] ?? [:]
     }
 
-    /// Must be called on bgQueue
-    private func flushBigram() {
-        guard !pendingBigram.isEmpty else { return }
-        exec("BEGIN")
-        for (prev, char) in pendingBigram { bindAndStep(stmtUpsertBigram, prev, char) }
-        exec("COMMIT")
-        pendingBigram.removeAll(keepingCapacity: true)
-    }
-
-    func flushAll() { bgQueue.sync { flushFreq(); flushBigram() } }
-
-    // MARK: - Query (thread-safe: all SQLite access routed through bgQueue)
-
-    private func syncQuery(_ key: String, _ stmt: OpaquePointer?) -> [String: Int] {
-        bgQueue.sync { queryMap(stmt, key) }
+    private func memBigram(_ prev: String) -> [String: Int] {
+        awaitLoad()
+        cacheLock.lock(); defer { cacheLock.unlock() }
+        return bigramCache[prev] ?? [:]
     }
 
     func sorted(_ candidates: [String], forCode code: String) -> [String] {
         if code.hasPrefix(",") { return candidates }
-        let pinned = pinnedCache[code]
-        let counts = syncQuery(code, stmtQueryFreq)
+        let pinned = pinnedChars(forCode: code)
+        let counts = memFreq(code)
         var result: [String]
         if !counts.isEmpty {
             result = candidates.sorted { (counts[$0] ?? 0) > (counts[$1] ?? 0) }
@@ -141,9 +225,9 @@ final class FreqTracker {
     func sortedWithContext(_ candidates: [String], forCode code: String, prev: String) -> [String] {
         if code.hasPrefix(",") { return candidates }
         guard !prev.isEmpty else { return sorted(candidates, forCode: code) }
-        let pinned = pinnedCache[code]
-        let uni = syncQuery(code, stmtQueryFreq)
-        let bi = syncQuery(prev, stmtQueryBigram)
+        let pinned = pinnedChars(forCode: code)
+        let uni = memFreq(code)
+        let bi = memBigram(prev)
         var result: [String]
         if uni.isEmpty && bi.isEmpty {
             result = candidates
@@ -173,7 +257,7 @@ final class FreqTracker {
     /// Top N learned bigram suggestions for a given prev char
     func topBigrams(prev: String, limit: Int = 3) -> [String] {
         guard !prev.isEmpty else { return [] }
-        let counts = syncQuery(prev, stmtQueryBigram)
+        let counts = memBigram(prev)
         guard !counts.isEmpty else { return [] }
         return counts.sorted { $0.value > $1.value }.prefix(limit).map { $0.key }
     }
@@ -182,7 +266,7 @@ final class FreqTracker {
     /// Stable: only moves candidates with recorded bigram to front; rest keep original order.
     func bigramBoost(prev: String, candidates: [String]) -> [String] {
         guard !prev.isEmpty else { return candidates }
-        let counts = syncQuery(prev, stmtQueryBigram)
+        let counts = memBigram(prev)
         guard !counts.isEmpty else { return candidates }
         var boosted = candidates.filter { counts[$0] != nil }.sorted { (counts[$0] ?? 0) > (counts[$1] ?? 0) }
         let rest = candidates.filter { counts[$0] == nil }
@@ -194,52 +278,72 @@ final class FreqTracker {
 
     /// Reload pinned cache from DB (called when prefs change from external app).
     func reloadPinned() {
-        bgQueue.sync { pinnedCache.removeAll(); loadPinnedCache() }
-    }
-
-    private func loadPinnedCache() {
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "SELECT code, chars FROM pinned", -1, &stmt, nil) == SQLITE_OK else { return }
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            let code = String(cString: sqlite3_column_text(stmt, 0))
-            let chars = String(cString: sqlite3_column_text(stmt, 1))
-            pinnedCache[code] = Array(chars).map(String.init)
+        bgQueue.async { [self] in
+            var p: [String: [String]] = [:]
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, "SELECT code, chars FROM pinned", -1, &stmt, nil) == SQLITE_OK {
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    let code = String(cString: sqlite3_column_text(stmt, 0))
+                    let chars = String(cString: sqlite3_column_text(stmt, 1))
+                    p[code] = Array(chars).map(String.init)
+                }
+            }
+            sqlite3_finalize(stmt)
+            cacheLock.lock()
+            pinnedCache = p
+            cacheLock.unlock()
         }
-        sqlite3_finalize(stmt)
     }
 
     /// Set pinned order for a code. chars is the ordered list of characters.
     func pin(code: String, chars: [String]) {
+        cacheLock.lock()
+        pinnedCache[code] = chars
+        cacheLock.unlock()
         let joined = chars.joined()
-        bgQueue.sync {
+        bgQueue.async { [self] in
             guard let stmt = stmtUpsertPinned else { return }
             sqlite3_reset(stmt)
             sqlite3_bind_text(stmt, 1, code, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(stmt, 2, joined, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
-        pinnedCache[code] = chars
     }
 
     /// Remove pinned order for a code.
     func unpin(code: String) {
-        bgQueue.sync {
+        cacheLock.lock()
+        pinnedCache.removeValue(forKey: code)
+        cacheLock.unlock()
+        bgQueue.async { [self] in
             guard let stmt = stmtDeletePinned else { return }
             sqlite3_reset(stmt)
             sqlite3_bind_text(stmt, 1, code, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
         }
-        pinnedCache.removeValue(forKey: code)
     }
 
     /// Get pinned chars for a code (from cache).
     func pinnedChars(forCode code: String) -> [String]? {
-        pinnedCache[code]
+        awaitLoad()
+        cacheLock.lock(); defer { cacheLock.unlock() }
+        return pinnedCache[code]
     }
 
     // MARK: - Maintenance
 
-    func decay(factor: Double = 0.9) {
+    /// cacheLock 持有中呼叫
+    private func decayMemoryLocked(_ factor: Double) {
+        for (key, m) in freqCache {
+            for (ch, v) in m { freqCache[key]![ch] = max(1, Int(Double(v) * factor)) }
+        }
+        for (key, m) in bigramCache {
+            for (ch, v) in m { bigramCache[key]![ch] = max(1, Int(Double(v) * factor)) }
+        }
+    }
+
+    /// bgQueue 專用 — 記憶體端已同步套過同因子；此處僅維護持久層並修剪表大小
+    private func decayDB(_ factor: Double) {
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, "UPDATE freq SET n=MAX(1,CAST(n*?1 AS INTEGER))", -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_double(stmt, 1, factor)
@@ -258,10 +362,33 @@ final class FreqTracker {
         exec("DELETE FROM bigram WHERE n<=1 AND rowid NOT IN (SELECT rowid FROM bigram ORDER BY n DESC LIMIT 5000)")
     }
 
+    func decay(factor: Double = 0.9) {
+        var f: [(code: String, char: String)] = []
+        var b: [(prev: String, char: String)] = []
+        cacheLock.lock()
+        decayMemoryLocked(factor)
+        f = pendingFreq; pendingFreq.removeAll(keepingCapacity: true)
+        b = pendingBigram; pendingBigram.removeAll(keepingCapacity: true)
+        cacheLock.unlock()
+        bgQueue.async { [self] in
+            flushRows(f.map { ($0.code, $0.char) }, stmtUpsertFreq)
+            flushRows(b.map { ($0.prev, $0.char) }, stmtUpsertBigram)
+            decayDB(factor)
+        }
+    }
+
     func reset() {
-        exec("DELETE FROM freq")
-        exec("DELETE FROM bigram")
+        cacheLock.lock()
+        pendingFreq.removeAll()
+        pendingBigram.removeAll()
+        freqCache.removeAll()
+        bigramCache.removeAll()
         recordCount = 0
+        cacheLock.unlock()
+        bgQueue.async { [self] in
+            exec("DELETE FROM freq")
+            exec("DELETE FROM bigram")
+        }
     }
 
     func saveIfNeeded() {
@@ -282,6 +409,7 @@ final class FreqTracker {
         let bigram: [String: [String: Int]]?
     }
 
+    /// bgQueue 專用（init 載入前執行 — 匯入結果由後續 loadCaches 帶進記憶體）
     private func migrateFromJSON(dir: String) {
         let jsonPath = dir + "/freq.json"
         guard FileManager.default.fileExists(atPath: jsonPath) else { return }
@@ -306,6 +434,7 @@ final class FreqTracker {
         }
     }
 
+    /// bgQueue 專用
     private func importJSON(_ s: JSONStorage) {
         exec("BEGIN")
         for (code, counts) in s.freq {
@@ -339,13 +468,34 @@ final class FreqTracker {
             .appendingPathComponent("Documents/freq.json")
     }
 
+    /// bgQueue 專用
     private func mergeFromiCloud() {
         guard let url = Self.iCloudFreqURL else { return }
         let data: Data
         do { data = try Data(contentsOf: url) }
         catch { DebugLog.log("FreqTracker mergeFromiCloud read: \(error.localizedDescription)"); return }
-        do { let remote = try JSONDecoder().decode(JSONStorage.self, from: data); importJSON(remote) }
+        do {
+            let remote = try JSONDecoder().decode(JSONStorage.self, from: data)
+            importJSON(remote)
+            resyncCachesFromDB()
+        }
         catch { DebugLog.log("FreqTracker mergeFromiCloud decode: \(error.localizedDescription)") }
+    }
+
+    /// bgQueue 專用：pending 先落盤 → DB 整份重讀 → 換掉記憶體（iCloud merge 後同步）
+    private func resyncCachesFromDB() {
+        cacheLock.lock()
+        let f = pendingFreq; pendingFreq.removeAll(keepingCapacity: true)
+        let b = pendingBigram; pendingBigram.removeAll(keepingCapacity: true)
+        cacheLock.unlock()
+        flushRows(f.map { ($0.code, $0.char) }, stmtUpsertFreq)
+        flushRows(b.map { ($0.prev, $0.char) }, stmtUpsertBigram)
+        let nf = readCounts("SELECT code,char,n FROM freq")
+        let nb = readCounts("SELECT prev,char,n FROM bigram")
+        cacheLock.lock()
+        freqCache = nf
+        bigramCache = nb
+        cacheLock.unlock()
     }
 
     // MARK: - SQLite Helpers
@@ -359,17 +509,6 @@ final class FreqTracker {
         sqlite3_bind_text(stmt, 1, key, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, char, -1, SQLITE_TRANSIENT)
         sqlite3_step(stmt)
-    }
-
-    private func queryMap(_ stmt: OpaquePointer?, _ key: String) -> [String: Int] {
-        guard let stmt else { return [:] }
-        sqlite3_reset(stmt)
-        sqlite3_bind_text(stmt, 1, key, -1, SQLITE_TRANSIENT)
-        var result: [String: Int] = [:]
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            result[String(cString: sqlite3_column_text(stmt, 0))] = Int(sqlite3_column_int(stmt, 1))
-        }
-        return result
     }
 }
 

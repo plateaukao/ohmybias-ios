@@ -1,13 +1,20 @@
 import Foundation
 
 /// Writes timestamped debug logs to AppConstants.sharedDir/debug.log
+/// 訊息用 @autoclosure 延遲建構 — debugMode 關閉（正常使用）時鍵擊路徑零字串組建。
 enum DebugLog {
     private static var logPath: String { AppConstants.sharedDir + "/debug.log" }
     private static let maxSize = 512 * 1024  // 512 KB
+    /// ISO8601DateFormatter 建構昂貴且執行緒安全 — 共用單一實例
+    private static let formatter = ISO8601DateFormatter()
 
-    static func log(_ msg: String) {
+    static func log(_ msg: @autoclosure () -> String) {
         guard OhMyBiasPrefs.debugMode else { return }
-        let ts = ISO8601DateFormatter().string(from: Date())
+        write(msg())
+    }
+
+    private static func write(_ msg: String) {
+        let ts = formatter.string(from: Date())
         let line = "[\(ts)] \(msg)\n"
         let fm = FileManager.default
         let dir = AppConstants.sharedDir
