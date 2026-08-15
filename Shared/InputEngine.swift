@@ -395,7 +395,6 @@ final class InputEngine {
         _isEnglishMode.toggle()
         if !_isEnglishMode { /* switching back to Chinese */ }
         _resetComposing()
-        delegate?.engineDidShowToast(_currentModeLabel)
     } }
 
     /// 直接設定中英模式（啟動時還原上次狀態用；不顯示 toast）

@@ -179,7 +179,7 @@ func testEngineSetEnglishMode() {
     check(!engine.isEnglishMode, "setEnglishMode(false) 回中文模式")
     engine.toggleEnglishMode()
     check(engine.isEnglishMode, "toggle 後為英文")
-    checkEqual(mock.toasts.last, "A", "toggle 顯示模式 toast")
+    check(mock.toasts.isEmpty, "中英切換不顯示 toast（鍵面已可見目前模式）")
 }
 
 func testSkinSettingsParse() {
