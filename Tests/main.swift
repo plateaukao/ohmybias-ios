@@ -195,6 +195,32 @@ func testSkinSettingsParse() {
     checkEqual(skin.toolbarButtons, SkinSettings.defaultToolbarButtons, "reload 還原內建預設")
 }
 
+func testSkinSettingsParseFlat() {
+    // 新版 cskin 匯出器的扁平 schema（toolbarButtons/palette/groups 在頂層、滑動開關為布林）
+    let json = """
+    {"skinInfo": {"name": "蝦米輸入法", "author": "Ryan"},
+     "spaceKeyLayout": "1",
+     "handedness": "left",
+     "enableSwipeUpActions": true, "enableSwipeDownActions": false,
+     "enableLongPressActions": true, "showSwipeUpText": false, "showSwipeDownText": true,
+     "toolbarButtons": [1, 3, 7, 0, 10, 5, 6, 0, 8, 2],
+     "enableCustomColors": true,
+     "palette": {"light": {"bg": "#D0D3DA01", "keySystem": "#979faf80"},
+                 "dark": {"bg": "#000000"}},
+     "groups": {"lowercaseSize": 17, "systemSize": 14}}
+    """.data(using: .utf8)!
+    let skin = SkinSettings.shared
+    skin.apply(jsonData: json)
+    checkEqual(skin.toolbarButtons, [1, 3, 7, 0, 10, 5, 6, 0, 8, 2], "扁平 toolbarButtons")
+    checkEqual(skin.spaceKeyLayout, "1", "扁平 spaceKeyLayout")
+    check(skin.swipeUpEnabled && !skin.swipeDownEnabled, "扁平滑動開關")
+    check(skin.longPressEnabled && !skin.showSwipeUpText && skin.showSwipeDownText, "扁平角標開關")
+    checkEqual(skin.colorHex("keySystem", dark: false), "#979faf80", "扁平 light palette")
+    checkEqual(skin.colorHex("bg", dark: true), "#000000", "扁平 dark palette")
+    checkEqual(skin.fontSize("lowercaseSize", default: 23), 17, "扁平 groups")
+    skin.reload()  // 還原預設，避免影響其他測試
+}
+
 // === 聯想（基本詞組）tests ===
 
 func testWikiCorpusPhrases() {
@@ -249,6 +275,7 @@ testEngineCommaCommandUnknown()
 testEngineModeSwitch()
 testEngineSetEnglishMode()
 testSkinSettingsParse()
+testSkinSettingsParseFlat()
 testWikiCorpusPhrases()
 testSuggestionEngineBasic()
 testEngineSuggestFlow()

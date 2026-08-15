@@ -45,35 +45,62 @@ final class SkinSettings {
         apply(jsonData: data)
     }
 
-    /// 解析 settings.json 內容（獨立出來供測試餵資料）
+    /// 解析 settings.json 內容（獨立出來供測試餵資料）。
+    /// 支援兩種 schema：舊版巢狀（toolbar/layout/swipe/globalSettings 區塊）與
+    /// 新版扁平（toolbarButtons/palette/groups/spaceKeyLayout 直接在頂層、
+    /// 滑動與長按開關為 enableSwipeUpActions 等布林）— 新版 cskin 匯出器已改用扁平格式。
     func apply(jsonData: Data) {
         guard let root = (try? JSONSerialization.jsonObject(with: jsonData)) as? [String: Any] else { return }
         isImported = true
         if let info = root["skinInfo"] as? [String: Any], let name = info["name"] as? String {
             skinName = name
         }
-        if let toolbar = root["toolbar"] as? [String: Any],
-           let buttons = toolbar["toolbarButtons"] as? [Any] {
+        // 工具列：新版頂層 / 舊版 toolbar 區塊
+        let buttons = (root["toolbarButtons"] as? [Any])
+            ?? ((root["toolbar"] as? [String: Any])?["toolbarButtons"] as? [Any])
+        if let buttons {
             let ids = buttons.compactMap { ($0 as? NSNumber)?.intValue }
             if !ids.isEmpty { toolbarButtons = ids }
         }
+        // 版面：新版頂層鍵優先，舊版 layout 區塊 fallback
+        if let v = root["keyboardLayout"] as? String, !v.isEmpty { keyboardLayout = v }
+        if let v = root["spaceKeyLayout"] as? String, !v.isEmpty { spaceKeyLayout = v }
+        if let v = root["longPressLayout"] as? String, !v.isEmpty { longPressLayout = v }
         if let layout = root["layout"] as? [String: Any] {
             if let v = layout["keyboardLayout"] as? String { keyboardLayout = v }
             if let v = layout["spaceKeyLayout"] as? String { spaceKeyLayout = v }
             if let v = layout["longPressLayout"] as? String { longPressLayout = v }
         }
+        // 滑動/長按開關：新版布林旗標
+        if root["enableSwipeUpActions"] != nil || root["enableSwipeDownActions"] != nil
+            || root["enableLongPressActions"] != nil {
+            var set = Set<String>()
+            func flag(_ key: String, _ name: String) {
+                if (root[key] as? Bool) ?? true { set.insert(name) }
+            }
+            flag("enableSwipeUpActions", "swipeUp")
+            flag("enableSwipeDownActions", "swipeDown")
+            flag("enableLongPressActions", "longPress")
+            flag("showSwipeUpText", "showSwipeUpText")
+            flag("showSwipeDownText", "showSwipeDownText")
+            enabledFeatures = set
+        }
+        // 舊版 swipe 區塊
         if let swipe = root["swipe"] as? [String: Any],
            let features = swipe["globalEnabledFeatures"] as? [String] {
             enabledFeatures = Set(features)
         }
-        if let global = root["globalSettings"] as? [String: Any] {
-            if let palette = global["palette"] as? [String: Any] {
-                paletteLight = palette["light"] as? [String: Any] ?? [:]
-                paletteDark = palette["dark"] as? [String: Any] ?? [:]
-            }
-            if let groups = global["groups"] as? [String: Any] {
-                fontGroups = groups.compactMapValues { ($0 as? NSNumber)?.doubleValue }
-            }
+        // 調色盤/字級：新版頂層 / 舊版 globalSettings 區塊
+        let paletteObj = (root["palette"] as? [String: Any])
+            ?? ((root["globalSettings"] as? [String: Any])?["palette"] as? [String: Any])
+        if let palette = paletteObj {
+            paletteLight = palette["light"] as? [String: Any] ?? [:]
+            paletteDark = palette["dark"] as? [String: Any] ?? [:]
+        }
+        let groupsObj = (root["groups"] as? [String: Any])
+            ?? ((root["globalSettings"] as? [String: Any])?["groups"] as? [String: Any])
+        if let groups = groupsObj {
+            fontGroups = groups.compactMapValues { ($0 as? NSNumber)?.doubleValue }
         }
     }
 

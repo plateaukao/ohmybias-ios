@@ -7,6 +7,13 @@ enum KeyboardTheme {
 
     /// 依 palette key 取動態色；skin 未定義時用預設 #RRGGBB(AA)
     private static func pal(_ key: String, _ lightDefault: String, _ darkDefault: String) -> UIColor {
+        pal([key], lightDefault, darkDefault)
+    }
+
+    /// 帶別名鏈的取色：依序試 skin palette 的每個 key，全部未定義才用內建預設。
+    /// 對應 sweetlime CskinParser 的 fallback（如 textSystem → 皮膚自己的 textMain）—
+    /// 匯入皮膚缺 v2 鍵時必須鏈回皮膚內的相容色，跳到內建常數會產生暗底暗字。
+    private static func pal(_ keys: [String], _ lightDefault: String, _ darkDefault: String) -> UIColor {
         UIColor { traits in
             // 鍵盤 extension 會繼承 host app 的 appearance；host 強制淺色時，
             // 仍應依系統外觀顯示使用者選擇的深色鍵盤。
@@ -14,8 +21,10 @@ enum KeyboardTheme {
             let dark = style == .unspecified
                 ? traits.userInterfaceStyle == .dark
                 : style == .dark
-            let hex = SkinSettings.shared.colorHex(key, dark: dark) ?? (dark ? darkDefault : lightDefault)
-            return parse(hex)
+            for k in keys {
+                if let hex = SkinSettings.shared.colorHex(k, dark: dark) { return parse(hex) }
+            }
+            return parse(dark ? darkDefault : lightDefault)
         }
     }
 
@@ -47,35 +56,36 @@ enum KeyboardTheme {
     static var textMain: UIColor { pal("textMain", "#000000", "#BBBBBB") }
     /// 角標提示文字（上滑/下滑符號）
     static var textSub: UIColor { pal("textSub", "#666666", "#555555") }
-    /// 功能鍵文字（深色模式時鍵底反白故用深字）
-    static var textSystem: UIColor { pal("textSystem", "#000000", "#1A1A1A") }
+    /// 功能鍵文字（內建深色設計鍵底反白故用深字；匯入皮膚未定義時鏈回其 textMain）
+    static var textSystem: UIColor { pal(["textSystem", "textMain"], "#000000", "#1A1A1A") }
     /// 一般鍵邊框
     static var border: UIColor { pal("border", "#000000", "#BBBBBB") }
-    /// 功能鍵邊框
-    static var systemBorder: UIColor { pal("systemBorder", "#000000", "#333333") }
+    /// 功能鍵邊框（未定義時鏈回皮膚的一般邊框）
+    static var systemBorder: UIColor { pal(["systemBorder", "border"], "#000000", "#333333") }
     static var borderWidth: CGFloat {
-        CGFloat(SkinSettings.shared.paletteNumber("borderSize", dark: false) ?? 1)
+        let dark = UIScreen.main.traitCollection.userInterfaceStyle == .dark
+        return CGFloat(SkinSettings.shared.paletteNumber("borderSize", dark: dark) ?? 1)
     }
     static let cornerRadius: CGFloat = 8
 
-    /// 工具列
+    /// 工具列（背景未定義時鏈回皮膚的鍵盤背景 — 同 sweetlime）
     static var toolbarColor: UIColor { pal("toolbarColor", "#000000", "#CCCCCC") }
-    static var toolbarBackground: UIColor { pal("toolbarBg", "#F0F0F0", "#000000") }
+    static var toolbarBackground: UIColor { pal(["toolbarBg", "bg"], "#F0F0F0", "#000000") }
 
     /// 候選列
     static var candidateText: UIColor { pal("candidateUnselectedText", "#000000", "#CCCCCC") }
     static var candidateSelectedText: UIColor { pal("candidateSelectedText", "#000000", "#000000") }
     static var candidateSelectedBackground: UIColor { pal("candidateSelectedBg", "#FFFFFF", "#CCCCCC") }
 
-    /// 面板（符號/emoji/顏文字）左欄分類、右欄內容
+    /// 面板（符號/emoji/顏文字）左欄分類、右欄內容（缺鍵時鏈回皮膚相容色）
     static var panelLeftBackground: UIColor { pal("panelLeftBg", "#F0F0F0", "#1C1C1E") }
     static var panelRightBackground: UIColor { pal("panelRightBg", "#FFFFFF", "#000000") }
-    static var panelText: UIColor { pal("panelLeftText", "#000000", "#F2F2F7") }
-    static var panelCategoryHighlight: UIColor { pal("panelCategoryHighlight", "#000000", "#F2F2F7") }
+    static var panelText: UIColor { pal(["panelLeftText", "textMain"], "#000000", "#F2F2F7") }
+    static var panelCategoryHighlight: UIColor { pal(["panelCategoryHighlight", "textMain"], "#000000", "#F2F2F7") }
 
-    /// 長按氣泡
-    static var bubbleShellBackground: UIColor { pal("bubbleShellBg", "#E9E2E2", "#FFFFFF") }
-    static var bubbleSelectedBackground: UIColor { pal("bubbleSelectedBg", "#000000", "#1A1A1A") }
+    /// 長按氣泡（殼/選中底未定義時鏈回皮膚的功能鍵色，避免與氣泡文字撞色）
+    static var bubbleShellBackground: UIColor { pal(["bubbleShellBg", "keySystemHighlight"], "#E9E2E2", "#FFFFFF") }
+    static var bubbleSelectedBackground: UIColor { pal(["bubbleSelectedBg", "keySystem"], "#000000", "#1A1A1A") }
     static var bubbleTextSelected: UIColor { pal("bubbleTextSelected", "#FFFFFF", "#FFFFFF") }
     static var bubbleTextUnselected: UIColor { pal("bubbleTextUnselected", "#000000", "#1A1A1A") }
 
