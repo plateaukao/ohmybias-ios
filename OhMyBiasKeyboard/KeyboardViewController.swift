@@ -46,6 +46,14 @@ final class KeyboardViewController: UIInputViewController {
         engine.freqTracker.flushAll()
     }
 
+    // 深淺色：完全跟隨繼承的 trait（extension window 會即時跟系統外觀），
+    // 由 UIKit 自動重解所有動態色。兩個看似可用的外觀來源實測都不可靠，絕不可用：
+    // - UIScreen.main.traitCollection：extension 行程裡不跟系統更新（切深色後仍
+    //   回報淺色）— 舊版在色彩 provider 內讀它，正是「切深淺色偶發卡舊主題」的根因。
+    // - textDocumentProxy.keyboardAppearance：host 給的快照會過期（Spotlight 深色
+    //   模式下仍回報 .light；系統鍵盤同場景實測照樣顯示深色）— 據此設
+    //   overrideUserInterfaceStyle 會把鍵盤釘在錯誤主題。
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         applyToolbarBackground()

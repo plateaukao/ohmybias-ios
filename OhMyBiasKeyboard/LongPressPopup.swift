@@ -29,7 +29,7 @@ final class LongPressPopup: UIView {
                                  height: Self.itemHeight))
         backgroundColor = KeyboardTheme.bubbleShellBackground
         layer.cornerRadius = KeyboardTheme.cornerRadius
-        layer.borderWidth = KeyboardTheme.borderWidth
+        layer.borderWidth = KeyboardTheme.borderWidth(for: traitCollection)
         layer.borderColor = KeyboardTheme.border.resolvedColor(with: traitCollection).cgColor
         layer.shadowColor = UIColor.black.cgColor
         layer.shadowOpacity = 0.2

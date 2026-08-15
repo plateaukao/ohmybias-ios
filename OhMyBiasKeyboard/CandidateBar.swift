@@ -224,7 +224,7 @@ final class CandidateBar: UIView {
             if i == 0 && !suggestions && candidates.count > 2 {
                 b.setTitleColor(KeyboardTheme.candidateSelectedText, for: .normal)
                 b.backgroundColor = KeyboardTheme.candidateSelectedBackground
-                b.layer.borderWidth = KeyboardTheme.borderWidth
+                b.layer.borderWidth = KeyboardTheme.borderWidth(for: traitCollection)
                 b.layer.borderColor = KeyboardTheme.border.resolvedColor(with: traitCollection).cgColor
             } else {
                 b.backgroundColor = nil
@@ -240,5 +240,16 @@ final class CandidateBar: UIView {
 
     @objc private func didTap(_ sender: UIButton) {
         onSelect?(sender.tag)
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        // CGColor 不會自動跟隨深淺色，且 setCandidates 內容未變時短路不重設 —
+        // 這裡重解選中候選（第 0 顆）的邊框
+        if activeButtons > 0, let b = stack.arrangedSubviews.first as? UIButton,
+           b.layer.borderWidth > 0 {
+            b.layer.borderWidth = KeyboardTheme.borderWidth(for: traitCollection)
+            b.layer.borderColor = KeyboardTheme.border.resolvedColor(with: traitCollection).cgColor
+        }
     }
 }

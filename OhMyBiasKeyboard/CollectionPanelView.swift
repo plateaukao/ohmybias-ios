@@ -98,7 +98,7 @@ final class CollectionPanelView: UIView {
         b.setTitleColor(KeyboardTheme.textSystem, for: .normal)
         b.backgroundColor = KeyboardTheme.keySystem
         b.layer.cornerRadius = KeyboardTheme.cornerRadius
-        b.layer.borderWidth = KeyboardTheme.borderWidth
+        b.layer.borderWidth = KeyboardTheme.borderWidth(for: traitCollection)
         b.layer.borderColor = KeyboardTheme.systemBorder.resolvedColor(with: traitCollection).cgColor
         b.translatesAutoresizingMaskIntoConstraints = false
         b.addTarget(self, action: selector, for: .touchUpInside)
@@ -128,6 +128,7 @@ final class CollectionPanelView: UIView {
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         for button in bottomButtons {
+            button.layer.borderWidth = KeyboardTheme.borderWidth(for: traitCollection)
             button.layer.borderColor = KeyboardTheme.systemBorder.resolvedColor(with: traitCollection).cgColor
         }
     }

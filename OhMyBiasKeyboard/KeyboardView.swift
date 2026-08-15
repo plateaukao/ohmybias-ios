@@ -475,7 +475,6 @@ final class KeyButton: UIButton {
             setTitleColor(spec.isSpecial ? KeyboardTheme.textSystem : KeyboardTheme.textMain, for: .normal)
         }
         layer.cornerRadius = KeyboardTheme.cornerRadius
-        layer.borderWidth = KeyboardTheme.borderWidth
         addHintLabels()
         applyColors()
     }
@@ -512,6 +511,7 @@ final class KeyButton: UIButton {
     }
 
     private func applyColors() {
+        layer.borderWidth = KeyboardTheme.borderWidth(for: traitCollection)  // 皮膚淺/深邊框寬可能不同
         if spec.isSpecial {
             backgroundColor = isHighlighted ? KeyboardTheme.keySystemHighlight : KeyboardTheme.keySystem
             layer.borderColor = KeyboardTheme.systemBorder.resolvedColor(with: traitCollection).cgColor

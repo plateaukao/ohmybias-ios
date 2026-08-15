@@ -24,14 +24,12 @@ enum KeyboardTheme {
         }
         let light = resolve(dark: false)
         let darkColor = resolve(dark: true)
+        // provider 必須是傳入 traits 的純函數 — UIKit 只在視圖 trait 改變時重解動態色。
+        // 在此讀 UIScreen 等全域狀態會卡舊主題：extension 行程的 UIScreen traits
+        // 不跟著系統外觀更新（深淺色切換不重繪的根因）。外觀完全跟隨繼承 trait —
+        // 詳見 KeyboardViewController 內「深淺色」註解。
         return UIColor { traits in
-            // 鍵盤 extension 會繼承 host app 的 appearance；host 強制淺色時，
-            // 仍應依系統外觀顯示使用者選擇的深色鍵盤。
-            let style = UIScreen.main.traitCollection.userInterfaceStyle
-            let dark = style == .unspecified
-                ? traits.userInterfaceStyle == .dark
-                : style == .dark
-            return dark ? darkColor : light
+            traits.userInterfaceStyle == .dark ? darkColor : light
         }
     }
 
@@ -83,11 +81,8 @@ enum KeyboardTheme {
                 c.resolvedColor(with: traits).getRed(&r, green: &g, blue: &b, alpha: &a)
                 return (r, g, b, a)
             }
-            // 底色自身也可能帶 alpha → 先壓在純白/純黑地上
-            let dark = UIScreen.main.traitCollection.userInterfaceStyle == .unspecified
-                ? traits.userInterfaceStyle == .dark
-                : UIScreen.main.traitCollection.userInterfaceStyle == .dark
-            let ground: CGFloat = dark ? 0 : 1
+            // 底色自身也可能帶 alpha → 先壓在純白/純黑地上（深淺判斷同 pal：只看傳入 traits）
+            let ground: CGFloat = traits.userInterfaceStyle == .dark ? 0 : 1
             let b = rgba(base)
             let gr = b.r * b.a + ground * (1 - b.a)
             let gg = b.g * b.a + ground * (1 - b.a)
@@ -122,8 +117,9 @@ enum KeyboardTheme {
     static var border: UIColor { cached("border") { pal("border", "#000000", "#BBBBBB") } }
     /// 功能鍵邊框（未定義時鏈回皮膚的一般邊框）
     static var systemBorder: UIColor { cached("systemBorder") { pal(["systemBorder", "border"], "#000000", "#333333") } }
-    static var borderWidth: CGFloat {
-        let dark = UIScreen.main.traitCollection.userInterfaceStyle == .dark
+    /// 邊框寬依皮膚淺/深色調色盤可能不同 — 以呼叫端視圖的 traits 判斷，勿讀全域外觀
+    static func borderWidth(for traits: UITraitCollection) -> CGFloat {
+        let dark = traits.userInterfaceStyle == .dark
         return CGFloat(SkinSettings.shared.paletteNumber("borderSize", dark: dark) ?? 1)
     }
     static let cornerRadius: CGFloat = 8
