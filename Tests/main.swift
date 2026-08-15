@@ -99,6 +99,21 @@ func testEngineComposeAndCommit() {
     checkEqual(engine.composing, "", "composing cleared after commit")
 }
 
+func testEngineEnglishPassthrough() {
+    let (engine, mock) = makeEngine()
+    // fixture 表 maxCodeLength=2 — "hello" 無候選且超長，應續收不清除
+    for ch in "hello" { engine.handleLetter(String(ch)) }
+    checkEqual(engine.composing, "hello", "無候選時續打不清除")
+    check(engine.currentCandidates.isEmpty, "英文直通中無候選")
+    engine.handleSpace()
+    checkEqual(mock.commits.last, "hello", "空白鍵原樣送出字串")
+    checkEqual(engine.composing, "", "送出後清空 composing")
+    // 送出後 composing 已空，再次 handleSpace 不應動作（controller 層會直接輸出空白）
+    let commitCount = mock.commits.count
+    engine.handleSpace()
+    checkEqual(mock.commits.count, commitCount, "composing 空時 handleSpace 無動作")
+}
+
 func testEngineBackspaceAndEscape() {
     let (engine, mock) = makeEngine()
     engine.handleLetter("a")
@@ -268,6 +283,7 @@ func testSuggestDisabled() {
 testHarness()
 testCINCompileRoundtrip()
 testEngineComposeAndCommit()
+testEngineEnglishPassthrough()
 testEngineBackspaceAndEscape()
 testEngineVRSF()
 testEnginePunctuationPairing()

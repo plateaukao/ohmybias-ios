@@ -135,7 +135,6 @@ final class InputEngine {
 
     func handleLetter(_ char: String) { sync {
         _snapComposing = _composing; _snapCandidates = _currentCandidates; _snapIsWildcard = _isWildcard
-        _lastWasEmptySpace = false
 
         // Pin mode: letters build the code to pin
         if _isPinMode {
@@ -176,17 +175,15 @@ final class InputEngine {
                 _commitText(_currentCandidates[0])
                 _composing = char; _isWildcard = false
             } else {
-                _resetComposing(); return
+                // 英文直通：無候選時不清除、讓使用者續打，空白鍵原樣送出
+                _composing = newComposing
+                _notifyComposing(); _notifyCandidates(); return
             }
         } else {
             _composing = newComposing
         }
 
         _refreshCandidates()
-
-        if _currentCandidates.isEmpty && _composing.count >= cinTable.maxCodeLength && !_isWildcard {
-            _resetComposing(); return
-        }
 
         if prefs.autoCommit &&
            _currentCandidates.count == 1 && _composing.count >= 2 && !_canExtendCode(_composing) {
@@ -195,8 +192,6 @@ final class InputEngine {
 
         _notifyComposing(); _notifyCandidates()
     } }
-
-    private var _lastWasEmptySpace = false
 
     func handleSpace() { sync {
         if _composing.isEmpty { return }
@@ -214,12 +209,6 @@ final class InputEngine {
             _resetComposing(); _currentCandidates = []; _notifyCandidates()
             delegate?.engineDidClearComposing(); return
         }
-        // Double-space = escape (clear composing)
-        if _lastWasEmptySpace && _currentCandidates.isEmpty {
-            _lastWasEmptySpace = false
-            _resetComposing(); delegate?.engineDidClearComposing(); return
-        }
-        _lastWasEmptySpace = _currentCandidates.isEmpty
         if _isInCommaCommand {
             if _commaCommandBuffer.isEmpty {
                 _isInCommaCommand = false; _resetComposing()
@@ -228,7 +217,11 @@ final class InputEngine {
             _dispatchCommaCommand(); return
         }
         if _currentCandidates.isEmpty {
-            _resetComposing(); delegate?.engineDidClearComposing(); return
+            // 英文直通：無候選時空白鍵把打的字串原樣送出（不記字頻）
+            let raw = _composing
+            _resetComposing()
+            delegate?.engineDidCommit(raw)
+            return
         }
         _commitText(_currentCandidates[0])
     } }
