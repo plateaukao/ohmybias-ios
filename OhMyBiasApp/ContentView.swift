@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 皮膚設計器網站（plateaukao/ohmybias-skin — 匯出 .cskin 後回本頁匯入）
+/// 鍵盤外觀編輯器網站（plateaukao/ohmybias-skin — 匯出 .cskin 後回本頁匯入）
 private let skinDesignerURL = URL(string: "https://plateaukao.github.io/ohmybias-skin/")!
 
 struct ContentView: View {
@@ -55,7 +55,7 @@ struct ContentView: View {
 
                 Section("皮膚") {
                     Text(skinStatus).font(.footnote)
-                    Link("皮膚設計器（網頁）", destination: skinDesignerURL)
+                    Link("鍵盤外觀編輯器（網頁）", destination: skinDesignerURL)
                     Button("匯入皮膚（.cskin）") { showSkinImporter = true }
                     if SkinSettings.shared.isImported {
                         Button("還原內建皮膚", role: .destructive) { resetSkin() }
