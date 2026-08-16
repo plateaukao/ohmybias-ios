@@ -19,6 +19,7 @@ func checkEqual<T: Equatable>(_ a: T, _ b: T, _ msg: String = "", file: String =
 struct MockPrefs: IMEPreferences {
     var suggestEnabled = true
     var autoCommit = false
+    var overflowAutoCommit = false
     var fuzzyMatch = false
     var showCodeHint = false
     var suggestStrategy = "general"
@@ -46,6 +47,7 @@ ba 朋
 hj 手
 hj 乎
 zb 「
+zzzz 龘
 %chardef end
 """
 
@@ -101,17 +103,35 @@ func testEngineComposeAndCommit() {
 
 func testEngineEnglishPassthrough() {
     let (engine, mock) = makeEngine()
-    // fixture 表 maxCodeLength=2 — "hello" 無候選且超長，應續收不清除
+    // fixture 表 maxCodeLength=4（CINTable 下限）— "hello" 無候選且超長，應續收不清除
     for ch in "hello" { engine.handleLetter(String(ch)) }
     checkEqual(engine.composing, "hello", "無候選時續打不清除")
     check(engine.currentCandidates.isEmpty, "英文直通中無候選")
     engine.handleSpace()
-    checkEqual(mock.commits.last, "hello", "空白鍵原樣送出字串")
+    checkEqual(mock.commits.last, "hello ", "空白鍵原樣送出字串＋尾隨空格")
     checkEqual(engine.composing, "", "送出後清空 composing")
     // 送出後 composing 已空，再次 handleSpace 不應動作（controller 層會直接輸出空白）
     let commitCount = mock.commits.count
     engine.handleSpace()
     checkEqual(mock.commits.count, commitCount, "composing 空時 handleSpace 無動作")
+}
+
+func testEngineOverflowAutoCommit() {
+    // 預設關：滿碼有候選（zzzz=龘）再打第五鍵不頂字 — 續打成 raw、空白原樣送出
+    // （weekly 情境：前四碼恰為有效字根的英文字也要能直通）
+    let (engine, mock) = makeEngine()
+    for ch in "zzzzz" { engine.handleLetter(String(ch)) }
+    checkEqual(engine.composing, "zzzzz", "滿碼有候選仍續打不頂字")
+    check(engine.currentCandidates.isEmpty, "超長字串無候選")
+    engine.handleSpace()
+    checkEqual(mock.commits.last, "zzzzz ", "空白鍵原樣送出＋尾隨空格")
+
+    // 開啟頂字上屏：滿碼再打一鍵送出首選、開始下一字
+    var prefs = MockPrefs(); prefs.overflowAutoCommit = true
+    let (engine2, mock2) = makeEngine(prefs: prefs)
+    for ch in "zzzzz" { engine2.handleLetter(String(ch)) }
+    checkEqual(mock2.commits.last, "龘", "頂字上屏送出 zzzz 首選")
+    checkEqual(engine2.composing, "z", "頂字後以新鍵開始下一字")
 }
 
 func testEngineBackspaceAndEscape() {
@@ -284,6 +304,7 @@ testHarness()
 testCINCompileRoundtrip()
 testEngineComposeAndCommit()
 testEngineEnglishPassthrough()
+testEngineOverflowAutoCommit()
 testEngineBackspaceAndEscape()
 testEngineVRSF()
 testEnginePunctuationPairing()

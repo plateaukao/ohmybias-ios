@@ -5,6 +5,7 @@ import Foundation
 protocol IMEPreferences {
     var suggestEnabled: Bool { get }
     var autoCommit: Bool { get }
+    var overflowAutoCommit: Bool { get }
     var fuzzyMatch: Bool { get }
     var showCodeHint: Bool { get }
     var suggestStrategy: String { get }
@@ -21,6 +22,7 @@ final class DefaultPreferences: IMEPreferences {
     static let shared = DefaultPreferences()
     var suggestEnabled: Bool { OhMyBiasPrefs.suggestEnabled }
     var autoCommit: Bool { OhMyBiasPrefs.autoCommit }
+    var overflowAutoCommit: Bool { OhMyBiasPrefs.overflowAutoCommit }
     var fuzzyMatch: Bool { OhMyBiasPrefs.fuzzyMatch }
     var showCodeHint: Bool { OhMyBiasPrefs.showCodeHint }
     var suggestStrategy: String { OhMyBiasPrefs.suggestStrategy }

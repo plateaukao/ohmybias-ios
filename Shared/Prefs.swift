@@ -10,6 +10,13 @@ struct OhMyBiasPrefs {
         set { defaults.set(newValue, forKey: "autoCommit") }
     }
 
+    /// 頂字上屏：滿碼且有候選時，下一鍵自動送出首選、開始下一字。
+    /// 預設關 — 開啟時像 weekly 這種前四碼是有效字根的英文字無法直通
+    static var overflowAutoCommit: Bool {
+        get { defaults.object(forKey: "overflowAutoCommit") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "overflowAutoCommit") }
+    }
+
     /// 送字後顯示字根碼提示
     static var showCodeHint: Bool {
         get { defaults.object(forKey: "showCodeHint") as? Bool ?? false }

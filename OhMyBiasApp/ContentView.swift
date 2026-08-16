@@ -17,6 +17,7 @@ struct ContentView: View {
 
     @AppStorage("suggestEnabled", store: OhMyBiasPrefs.defaults) private var suggestEnabled = true
     @AppStorage("autoCommit", store: OhMyBiasPrefs.defaults) private var autoCommit = false
+    @AppStorage("overflowAutoCommit", store: OhMyBiasPrefs.defaults) private var overflowAutoCommit = false
     @AppStorage("fuzzyMatch", store: OhMyBiasPrefs.defaults) private var fuzzyMatch = true
     @AppStorage("showCodeHint", store: OhMyBiasPrefs.defaults) private var showCodeHint = false
     @AppStorage("punctuationPairing", store: OhMyBiasPrefs.defaults) private var punctuationPairing = true
@@ -73,6 +74,12 @@ struct ContentView: View {
 
                 Section("輸入") {
                     Toggle("唯一候選自動送出", isOn: $autoCommit)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Toggle("滿碼頂字上屏", isOn: $overflowAutoCommit)
+                        Text("滿碼後續打自動送出首選。開啟時 weekly 這類前四碼恰為字根的英文字無法直通")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                     Toggle("相鄰鍵模糊比對", isOn: $fuzzyMatch)
                     Toggle("送字後顯示字根提示", isOn: $showCodeHint)
                     Toggle("成對標點自動補右半", isOn: $punctuationPairing)

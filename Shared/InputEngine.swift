@@ -171,13 +171,13 @@ final class InputEngine {
         let maxLen = cinTable.maxCodeLength
 
         if newComposing.count > maxLen {
-            if !_currentCandidates.isEmpty {
+            // 頂字上屏（偏好，預設關）：滿碼且有候選時，下一鍵送出首選、開始下一字。
+            // 關閉時走英文直通 — 續打不清除，空白鍵原樣送出
+            if prefs.overflowAutoCommit && !_currentCandidates.isEmpty {
                 _commitText(_currentCandidates[0])
                 _composing = char; _isWildcard = false
             } else {
-                // 英文直通：無候選時不清除、讓使用者續打，空白鍵原樣送出
                 _composing = newComposing
-                _notifyComposing(); _notifyCandidates(); return
             }
         } else {
             _composing = newComposing
@@ -217,10 +217,11 @@ final class InputEngine {
             _dispatchCommaCommand(); return
         }
         if _currentCandidates.isEmpty {
-            // 英文直通：無候選時空白鍵把打的字串原樣送出（不記字頻）
+            // 英文直通：無候選時空白鍵把打的字串原樣送出（不記字頻）—
+            // 空白鍵本身也要上屏，如同英文模式打字尾隨空格
             let raw = _composing
             _resetComposing()
-            delegate?.engineDidCommit(raw)
+            delegate?.engineDidCommit(raw + " ")
             return
         }
         _commitText(_currentCandidates[0])
