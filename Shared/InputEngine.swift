@@ -227,6 +227,16 @@ final class InputEngine {
         _commitText(_currentCandidates[0])
     } }
 
+    /// 點候選列左側的組字碼 — 字母原樣上屏（英文直通的手動版：有候選但使用者
+    /// 要英文單字時用；不記字頻、不帶尾隨空格）
+    func commitComposingRaw() { sync {
+        if _composing.isEmpty || _isPinMode || _isInCommaCommand ||
+            _isZhuyinMode || _isPinyinMode || _isSameSoundMode { return }
+        let raw = _composing
+        _resetComposing()
+        delegate?.engineDidCommit(raw)
+    } }
+
     func handleBackspace() { sync {
         // Pin mode: backspace removes last picked char, or last code char, or exits
         if _isPinMode {

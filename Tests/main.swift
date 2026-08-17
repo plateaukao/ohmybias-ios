@@ -101,6 +101,20 @@ func testEngineComposeAndCommit() {
     checkEqual(engine.composing, "", "composing cleared after commit")
 }
 
+func testEngineCommitComposingRaw() {
+    // 有候選但使用者要英文單字：點組字碼原樣上屏（不帶尾隨空格、不記字頻）
+    let (engine, mock) = makeEngine()
+    engine.handleLetter("a")
+    check(!engine.currentCandidates.isEmpty, "有候選")
+    engine.commitComposingRaw()
+    checkEqual(mock.commits.last, "a", "原樣送出字母")
+    checkEqual(engine.composing, "", "送出後清空 composing")
+    check(engine.currentCandidates.isEmpty, "送出後清空候選")
+    let commitCount = mock.commits.count
+    engine.commitComposingRaw()
+    checkEqual(mock.commits.count, commitCount, "composing 空時無動作")
+}
+
 func testEngineEnglishPassthrough() {
     let (engine, mock) = makeEngine()
     // fixture 表 maxCodeLength=4（CINTable 下限）— "hello" 無候選且超長，應續收不清除
@@ -303,6 +317,7 @@ func testSuggestDisabled() {
 testHarness()
 testCINCompileRoundtrip()
 testEngineComposeAndCommit()
+testEngineCommitComposingRaw()
 testEngineEnglishPassthrough()
 testEngineOverflowAutoCommit()
 testEngineBackspaceAndEscape()

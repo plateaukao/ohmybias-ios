@@ -25,6 +25,8 @@ final class CandidateBar: UIView {
     var onSelect: ((Int) -> Void)?
     /// 工具列按鈕動作（路由至 KeyboardViewController.handleKey）
     var onToolbarKey: ((KeyAction) -> Void)?
+    /// 點組字碼標籤 — 把打的字母原樣上屏（要英文單字不要候選時）
+    var onCommitComposing: (() -> Void)?
 
     private let composingLabel = UILabel()
     private let scrollView = UIScrollView()
@@ -83,6 +85,10 @@ final class CandidateBar: UIView {
         composingLabel.setContentHuggingPriority(.required, for: .horizontal)
         composingLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         composingLabel.translatesAutoresizingMaskIntoConstraints = false
+        // 組字碼本身可點 — 有候選但要英文單字時，點了原樣上屏
+        composingLabel.isUserInteractionEnabled = true
+        composingLabel.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(composingTapped)))
         addSubview(composingLabel)
 
         scrollView.showsHorizontalScrollIndicator = false
@@ -240,6 +246,10 @@ final class CandidateBar: UIView {
 
     @objc private func didTap(_ sender: UIButton) {
         onSelect?(sender.tag)
+    }
+
+    @objc private func composingTapped() {
+        onCommitComposing?()
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
