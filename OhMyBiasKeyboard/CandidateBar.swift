@@ -72,7 +72,11 @@ final class CandidateBar: UIView {
 
     /// 語言鍵顯示目前輸入法：嘸蝦米 →「米」、英文 →「英」
     func setEnglishMode(_ isEnglish: Bool) {
-        languageButton?.setTitle(isEnglish ? "英" : "米", for: .normal)
+        // .system 按鈕會對 setTitle 做隱式淡入淡出 — 切換要即時，關掉
+        UIView.performWithoutAnimation {
+            languageButton?.setTitle(isEnglish ? "英" : "米", for: .normal)
+            languageButton?.layoutIfNeeded()
+        }
     }
 
     override init(frame: CGRect) {
@@ -222,25 +226,29 @@ final class CandidateBar: UIView {
 
         // 候選 1–2 個時不顯示數字前綴（與 macOS 版一致的精簡顯示）
         let showIndex = candidates.count > 2 && !suggestions
-        for (i, c) in candidates.enumerated() {
-            let b = obtainButton(at: i)
-            let title = showIndex && i < 9 ? "\(i + 1) \(c)" : c
-            b.setTitle(title, for: .normal)
-            b.setTitleColor(suggestions ? .systemBlue : KeyboardTheme.candidateText, for: .normal)
-            if i == 0 && !suggestions && candidates.count > 2 {
-                b.setTitleColor(KeyboardTheme.candidateSelectedText, for: .normal)
-                b.backgroundColor = KeyboardTheme.candidateSelectedBackground
-                b.layer.borderWidth = KeyboardTheme.borderWidth(for: traitCollection)
-                b.layer.borderColor = KeyboardTheme.border.resolvedColor(with: traitCollection).cgColor
-            } else {
-                b.backgroundColor = nil
-                b.layer.borderWidth = 0
+        // .system 按鈕會對 setTitle 做隱式淡入淡出（約 0.25s）— 候選要即時出現，關掉
+        UIView.performWithoutAnimation {
+            for (i, c) in candidates.enumerated() {
+                let b = obtainButton(at: i)
+                let title = showIndex && i < 9 ? "\(i + 1) \(c)" : c
+                b.setTitle(title, for: .normal)
+                b.setTitleColor(suggestions ? .systemBlue : KeyboardTheme.candidateText, for: .normal)
+                if i == 0 && !suggestions && candidates.count > 2 {
+                    b.setTitleColor(KeyboardTheme.candidateSelectedText, for: .normal)
+                    b.backgroundColor = KeyboardTheme.candidateSelectedBackground
+                    b.layer.borderWidth = KeyboardTheme.borderWidth(for: traitCollection)
+                    b.layer.borderColor = KeyboardTheme.border.resolvedColor(with: traitCollection).cgColor
+                } else {
+                    b.backgroundColor = nil
+                    b.layer.borderWidth = 0
+                }
+                b.tag = i
             }
-            b.tag = i
-        }
-        activeButtons = candidates.count
-        for j in candidates.count..<stack.arrangedSubviews.count {
-            stack.arrangedSubviews[j].isHidden = true
+            activeButtons = candidates.count
+            for j in candidates.count..<stack.arrangedSubviews.count {
+                stack.arrangedSubviews[j].isHidden = true
+            }
+            stack.layoutIfNeeded()
         }
     }
 
