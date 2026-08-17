@@ -27,8 +27,12 @@ final class CandidateBar: UIView {
     var onToolbarKey: ((KeyAction) -> Void)?
     /// 點組字碼標籤 — 把打的字母原樣上屏（要英文單字不要候選時）
     var onCommitComposing: (() -> Void)?
+    /// 點聯想詞列左側 ✕ — 關閉聯想、回到空閒工具列
+    var onDismissSuggestions: (() -> Void)?
 
     private let composingLabel = UILabel()
+    private let dismissButton = UIButton(type: .system)
+    private var dismissWidth: NSLayoutConstraint!
     private let scrollView = UIScrollView()
     private let stack = UIStackView()
     private let toolbarStack = UIStackView()
@@ -95,6 +99,17 @@ final class CandidateBar: UIView {
             UITapGestureRecognizer(target: self, action: #selector(composingTapped)))
         addSubview(composingLabel)
 
+        // 聯想詞列左側 ✕：不想要聯想時一鍵關閉（平時寬 0 收起）
+        let xConfig = UIImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+        dismissButton.setImage(UIImage(systemName: "xmark", withConfiguration: xConfig), for: .normal)
+        dismissButton.tintColor = KeyboardTheme.textSub
+        dismissButton.accessibilityLabel = "關閉聯想"
+        dismissButton.isHidden = true
+        dismissButton.translatesAutoresizingMaskIntoConstraints = false
+        dismissButton.addAction(UIAction { [weak self] _ in self?.onDismissSuggestions?() },
+                                for: .touchUpInside)
+        addSubview(dismissButton)
+
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scrollView)
@@ -140,6 +155,7 @@ final class CandidateBar: UIView {
             if item.isLanguage { languageButton = b }
         }
 
+        dismissWidth = dismissButton.widthAnchor.constraint(equalToConstant: 0)
         NSLayoutConstraint.activate([
             composingLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             composingLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -147,7 +163,11 @@ final class CandidateBar: UIView {
             toolbarStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             toolbarStack.topAnchor.constraint(equalTo: topAnchor),
             toolbarStack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: composingLabel.trailingAnchor, constant: 8),
+            dismissButton.leadingAnchor.constraint(equalTo: composingLabel.trailingAnchor),
+            dismissButton.topAnchor.constraint(equalTo: topAnchor),
+            dismissButton.bottomAnchor.constraint(equalTo: bottomAnchor),
+            dismissWidth,
+            scrollView.leadingAnchor.constraint(equalTo: dismissButton.trailingAnchor, constant: 8),
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
             scrollView.topAnchor.constraint(equalTo: topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -228,6 +248,10 @@ final class CandidateBar: UIView {
         let showIndex = candidates.count > 2 && !suggestions
         // .system 按鈕會對 setTitle 做隱式淡入淡出（約 0.25s）— 候選要即時出現，關掉
         UIView.performWithoutAnimation {
+            // 聯想詞列才顯示左側 ✕（一般候選不能關 — 是組字狀態的一部分）
+            let showDismiss = suggestions && !candidates.isEmpty
+            dismissButton.isHidden = !showDismiss
+            dismissWidth.constant = showDismiss ? 30 : 0
             for (i, c) in candidates.enumerated() {
                 let b = obtainButton(at: i)
                 let title = showIndex && i < 9 ? "\(i + 1) \(c)" : c

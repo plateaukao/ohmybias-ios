@@ -107,6 +107,7 @@ final class KeyboardViewController: UIInputViewController {
 
         candidateBar.onSelect = { [weak self] idx in self?.didSelectCandidate(at: idx) }
         candidateBar.onToolbarKey = { [weak self] action in self?.handleKey(action) }
+        candidateBar.onDismissSuggestions = { [weak self] in self?.clearSuggestions() }
         candidateBar.onCommitComposing = { [weak self] in
             guard let self else { return }
             if OhMyBiasPrefs.hapticFeedback {
