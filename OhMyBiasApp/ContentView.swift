@@ -67,7 +67,7 @@ struct ContentView: View {
 
                 Section("聯想") {
                     Toggle("聯想詞（萌典詞組）", isOn: $suggestEnabled)
-                    NavigationLink("自訂詞（user_phrases.txt）") {
+                    NavigationLink("常用語設定") {
                         UserPhrasesEditor()
                     }
                 }
@@ -233,7 +233,7 @@ struct ContentView: View {
     }
 }
 
-/// 使用者自訂詞編輯器 — 一行一詞，供聯想使用
+/// 常用語編輯器（user_phrases.txt，一行一詞 — ♥ 常用語面板內容＋聯想自訂詞）
 struct UserPhrasesEditor: View {
     @State private var text = ""
     private var path: String { AppConstants.sharedDir + "/user_phrases.txt" }
@@ -242,7 +242,7 @@ struct UserPhrasesEditor: View {
         TextEditor(text: $text)
             .font(.body)
             .autocorrectionDisabled()
-            .navigationTitle("自訂詞")
+            .navigationTitle("常用語設定")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 text = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
