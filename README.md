@@ -17,7 +17,7 @@ iOS 嘸蝦米（Boshiamy）鍵盤 — [Yabomish](https://github.com/plateaukao/y
 - **嘸蝦米輸入**：匯入自己的 `liu.cin`，on-device 編譯 mmap 零拷貝載入
 - **基本聯想詞**：commit 後即出現詞組聯想（萌典詞組，CC0，僅 687KB）＋自訂詞（user_phrases.txt）
 - **字頻學習**：freq.db 依使用習慣排序候選（iCloud 合併）；`,,PIN` 固定同碼字排序
-- **`,,` 指令**：`,,T/S/J` 切模式、`,,ZH` 注音查碼、`,,TO` 同音字、`,,PYS/PYT` 拼音查碼、`,,SG` 聯想開關、`,,V/VT/VS` 剪貼簿、`,,H` 說明
+- **`,,` 指令**：`,,T/S/J` 切模式、`,,ZH` 注音查碼、`,,TO` 同音字、`,,PYS/PYT` 拼音查碼、`,,SG` 聯想開關、`,,V/VT/VS` 剪貼簿。工具列 ⚙ 面板把全部指令做成可點按鈕（不必記指令），並提供進入容器 app 設定的入口
 - **極簡資料**：不含專業詞典／語料 binary（上游 full 版 98MB → 本版 <2MB）
 
 ### 鍵盤介面（以 sweetlime 皮膚為藍本）

@@ -35,6 +35,10 @@ final class KeyboardView: UIView {
     var onKey: ((KeyAction) -> Void)?
     /// 地球鍵需綁 handleInputModeList — 由 controller 提供
     var onGlobeSetup: ((UIButton) -> Void)?
+    /// 面板頁記憶體不足時先呼叫此鉤子釋放引擎可選快取（反查表等），再重試一次
+    var onPanelMemoryRelief: (() -> Void)?
+    /// 釋放後仍裝不了面板：已回退到字母頁 — controller 據此顯示提示
+    var onPanelUnavailable: (() -> Void)?
 
     var currentPage: Page = .letters
     /// 中英切換改變第三排前導鍵（英/⇧）與標點 — 變更時就地重建，
@@ -119,20 +123,13 @@ final class KeyboardView: UIView {
         case .symbols: rows = symbolRows()
         case .zhuyin:  rows = zhuyinRows()
         case .numeric9: rows = numeric9Rows()
-        case .symbolPanel:
-            installPanel(CollectionData.symbols, fontSize: KeyboardTheme.panelSymbolFontSize); return
-        case .emoji:
-            // 「常用」分類 = 最近使用紀錄，排在「表情」前；沒紀錄就不顯示
-            let recent = RecentEmojis.shared.all()
-            let sections = recent.isEmpty ? CollectionData.emojis : [("常用", recent)] + CollectionData.emojis
-            installPanel(sections, fontSize: KeyboardTheme.panelEmojiFontSize, recordRecent: true); return
-        case .kaomojis:
-            installPanel(CollectionData.kaomojis, fontSize: KeyboardTheme.panelKaomojiFontSize); return
-        case .phrases:
-            // ♥ 常用語面板 — 內容為 user_phrases.txt 自訂詞，點選直接上屏
-            UserPhrases.shared.reload()
-            installPanel([("常用語", UserPhrases.shared.allPhrases())],
-                         fontSize: KeyboardTheme.panelKaomojiFontSize); return
+        case .symbolPanel, .emoji, .kaomojis, .phrases:
+            if installPanel(for: currentPage) { return }
+            // 記憶體不足裝不了面板 — 回退字母頁，絕不留空白鍵盤
+            currentPage = .letters
+            pageBeforeToolbarToggle = nil
+            onPanelUnavailable?()
+            rows = letterRows()
         }
         // 真正的空白鍵（地球鍵也是 .space 動作，需排除）
         func isSpaceKey(_ spec: KeySpec) -> Bool {
@@ -351,8 +348,33 @@ final class KeyboardView: UIView {
 
     private var panelView: CollectionPanelView?
 
-    private func installPanel(_ sections: [(String, [String])], fontSize: CGFloat, recordRecent: Bool = false) {
-        guard MemoryBudget.canAfford(MemoryBudget.collectionPanel) else { return }
+    /// 依面板頁取內容並嘗試安裝；記憶體不足時回傳 false（不動 rowsStack）
+    private func installPanel(for page: Page) -> Bool {
+        switch page {
+        case .symbolPanel:
+            return installPanel(CollectionData.symbols, fontSize: KeyboardTheme.panelSymbolFontSize)
+        case .emoji:
+            // 「常用」分類 = 最近使用紀錄，排在「表情」前；沒紀錄就不顯示
+            let recent = RecentEmojis.shared.all()
+            let sections = recent.isEmpty ? CollectionData.emojis : [("常用", recent)] + CollectionData.emojis
+            return installPanel(sections, fontSize: KeyboardTheme.panelEmojiFontSize, recordRecent: true)
+        case .kaomojis:
+            return installPanel(CollectionData.kaomojis, fontSize: KeyboardTheme.panelKaomojiFontSize)
+        case .phrases:
+            // ♥ 常用語面板 — 內容為 user_phrases.txt 自訂詞，點選直接上屏
+            UserPhrases.shared.reload()
+            return installPanel([("常用語", UserPhrases.shared.allPhrases())],
+                                fontSize: KeyboardTheme.panelKaomojiFontSize)
+        default:
+            return false
+        }
+    }
+
+    private func installPanel(_ sections: [(String, [String])], fontSize: CGFloat, recordRecent: Bool = false) -> Bool {
+        if !MemoryBudget.canAfford(MemoryBudget.collectionPanel) {
+            onPanelMemoryRelief?()
+            guard MemoryBudget.canAfford(MemoryBudget.collectionPanel) else { return false }
+        }
         rowsStack.isHidden = true
         let panel = CollectionPanelView(sections: sections, itemFontSize: fontSize)
         panel.onInsert = { [weak self] text in
@@ -370,6 +392,7 @@ final class KeyboardView: UIView {
             panel.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
         panelView = panel
+        return true
     }
 
     /// 標準注音鍵盤排列（對應 qwerty 位置），聲調鍵混排於其中

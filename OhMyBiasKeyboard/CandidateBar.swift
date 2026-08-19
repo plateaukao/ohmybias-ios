@@ -1,20 +1,4 @@
 import UIKit
-import SwiftUI
-
-/// 設定鍵 — iOS 18 起鍵盤 extension 的 openURL: selector 被封，
-/// 改用 SwiftUI Link（系統允許使用者點連結開 URL）開容器 app。
-private struct SettingsLinkView: View {
-    var body: some View {
-        Link(destination: URL(string: "ohmybias://settings")!) {
-            Image(systemName: "gearshape")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundColor(Color(KeyboardTheme.toolbarColor))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-        }
-        .accessibilityLabel("設定")
-    }
-}
 
 /// 候選字列：左側 composing 碼、右側水平捲動候選字／聯想詞。
 /// 空閒時顯示目前輸入法模式＋sweetlime 工具列（組字/候選出現時自動隱藏）。
@@ -37,7 +21,6 @@ final class CandidateBar: UIView {
     private let stack = UIStackView()
     private let toolbarStack = UIStackView()
     private var languageButton: UIButton?
-    private var toolbarHostingControllers: [UIViewController] = []
 
     /// 工具列項目：由 cskin 的 toolbarButtons 按鈕 ID 對應而來
     private struct ToolbarItem {
@@ -130,14 +113,6 @@ final class CandidateBar: UIView {
                 toolbarStack.addArrangedSubview(UIView())
                 continue
             }
-            // 設定鍵：SwiftUI Link（iOS 18 鍵盤 extension 唯一可靠的開 URL 途徑）
-            if case .openSettings = item.action {
-                let host = UIHostingController(rootView: SettingsLinkView())
-                host.view.backgroundColor = .clear
-                toolbarHostingControllers.append(host)
-                toolbarStack.addArrangedSubview(host.view)
-                continue
-            }
             let b = UIButton(type: .system)
             if let icon = item.icon {
                 let config = UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)
@@ -181,26 +156,6 @@ final class CandidateBar: UIView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-        guard let parent = parentViewController else { return }
-        for host in toolbarHostingControllers where host.parent == nil {
-            parent.addChild(host)
-            host.didMove(toParent: parent)
-        }
-    }
-
-    private var parentViewController: UIViewController? {
-        var responder: UIResponder? = next
-        while let current = responder {
-            if let controller = current as? UIViewController {
-                return controller
-            }
-            responder = current.next
-        }
-        return nil
-    }
 
     /// 上次顯示內容 — 相同就完全不動（每個按鍵/每次切輸入框都會重設候選列）
     private var lastCandidates: [String] = []

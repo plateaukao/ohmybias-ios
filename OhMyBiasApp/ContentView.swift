@@ -104,7 +104,8 @@ struct ContentView: View {
                     ,,PIN 固定排序  ,,UNPINx 解除
                     ,,RS 重置字頻  ,,RL 重載字表
                     ,,V 貼上純文字  ,,VT 簡→繁  ,,VS 繁→簡
-                    ,,H 完整說明
+
+                    以上指令在鍵盤工具列 ⚙ 也都有對應按鈕，可直接點選
                     """)
                     .font(.system(.footnote, design: .monospaced))
                 }

@@ -1,4 +1,5 @@
 import UIKit
+import SwiftUI
 
 /// iOS 鍵盤 extension 主控制器 — InputEngine 的 iOS delegate 實作。
 /// 對應 macOS 版的 InputController：鍵盤事件 → InputEngine → delegate 回呼 → UI。
@@ -44,6 +45,8 @@ final class KeyboardViewController: UIInputViewController {
         super.viewWillDisappear(animated)
         // 收鍵盤時把未寫入的字頻紀錄落盤 — extension 被殺也不掉學習資料
         engine.freqTracker.flushAll()
+        // 記憶體偏高時釋放可選快取（反查表等）— 快取不清會活到行程被殺為止
+        MemoryBudget.trimIfNeeded(cinTable: engine.cinTable)
     }
 
     // 深淺色：完全跟隨繼承的 trait（extension window 會即時跟系統外觀），
@@ -116,6 +119,12 @@ final class KeyboardViewController: UIInputViewController {
             self.engine.commitComposingRaw()
         }
         keyboardView.onKey = { [weak self] action in self?.handleKey(action) }
+        keyboardView.onPanelMemoryRelief = { [weak self] in
+            self?.engine.cinTable.releaseOptionalCaches()
+        }
+        keyboardView.onPanelUnavailable = { [weak self] in
+            self?.showToast("記憶體不足，暫時無法開啟面板", duration: 1.5)
+        }
         keyboardView.onGlobeSetup = { [weak self] button in
             guard let self else { return }
             button.addTarget(self, action: #selector(self.handleInputModeList(from:with:)), for: .allTouchEvents)
@@ -165,6 +174,10 @@ final class KeyboardViewController: UIInputViewController {
     private func handleKey(_ action: KeyAction) {
         if OhMyBiasPrefs.hapticFeedback {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        // 設定面板開著時點了其他工具列按鈕 — 先收面板，避免動作發生在面板底下
+        if let host = settingsPanelHost {
+            if case .openSettings = action {} else { dismissSettingsPanel(host) }
         }
         switch action {
         case .letter(let ch):
@@ -233,26 +246,58 @@ final class KeyboardViewController: UIInputViewController {
         case .dismissKeyboard:
             dismissKeyboard()
         case .openSettings:
-            openContainerApp()
+            toggleSettingsPanel()
         }
     }
 
-    /// 開啟容器 app 的設定畫面。鍵盤 extension 編譯期擋掉 UIApplication.shared，
-    /// 但 responder chain 上的 UIApplication 實體存在 — 以 objc selector 呼叫 openURL:。
-    /// （extensionContext.open 對鍵盤 extension 常不回呼 completion，只當備援）
-    private func openContainerApp() {
-        guard let url = URL(string: "ohmybias://settings") else { return }
-        let selector = sel_registerName("openURL:")
-        var responder: UIResponder? = self.next
-        while let r = responder {
-            if r.responds(to: selector) {
-                r.perform(selector, with: url)
+    // MARK: - ⚙ 設定面板（指令速查＋開啟設定連結）
+
+    private var settingsPanelHost: UIViewController?
+
+    /// 點齒輪展開/收起 — SwiftUI runtime（~10MB）在首次展開時才載入
+    private func toggleSettingsPanel() {
+        if let host = settingsPanelHost { dismissSettingsPanel(host); return }
+        if !MemoryBudget.canAfford(MemoryBudget.settingsPanel) {
+            engine.cinTable.releaseOptionalCaches()
+            guard MemoryBudget.canAfford(MemoryBudget.settingsPanel) else {
+                showToast("記憶體不足，暫時無法開啟面板", duration: 1.5)
                 return
             }
-            responder = r.next
         }
-        extensionContext?.open(url)
-        showToast("無法開啟設定 — 請從主畫面開啟 OhMyBias 米", duration: 1.5)
+        let panel = SettingsPanelView(
+            onCommand: { [weak self] cmd in
+                guard let self else { return }
+                if let host = self.settingsPanelHost { self.dismissSettingsPanel(host) }
+                self.engine.runCommaCommand(cmd)
+            },
+            onDismiss: { [weak self] in
+                guard let self, let host = self.settingsPanelHost else { return }
+                self.dismissSettingsPanel(host)
+            })
+        let host = UIHostingController(rootView: panel)
+        addChild(host)
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        // 不透明底色 + 關掉鍵面互動：SwiftUI hosting view 在無內容處 hitTest 會回 nil，
+        // 觸控就會穿透到 KeyboardView.hitTest 的「最近按鍵」後援而誤打字
+        host.view.backgroundColor = KeyboardTheme.panelRightBackground
+        keyboardView.isUserInteractionEnabled = false
+        view.addSubview(host.view)
+        NSLayoutConstraint.activate([
+            host.view.topAnchor.constraint(equalTo: keyboardView.topAnchor),
+            host.view.leadingAnchor.constraint(equalTo: keyboardView.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: keyboardView.trailingAnchor),
+            host.view.bottomAnchor.constraint(equalTo: keyboardView.bottomAnchor),
+        ])
+        host.didMove(toParent: self)
+        settingsPanelHost = host
+    }
+
+    private func dismissSettingsPanel(_ host: UIViewController) {
+        host.willMove(toParent: nil)
+        host.view.removeFromSuperview()
+        host.removeFromParent()
+        settingsPanelHost = nil
+        keyboardView.isUserInteractionEnabled = true
     }
 
     private func handleLetterKey(_ ch: String) {
@@ -415,6 +460,7 @@ extension KeyboardViewController: InputEngineDelegate {
 
     private func showToast(_ text: String, duration: Double) {
         toastWorkItem?.cancel()
+        view.bringSubviewToFront(toastLabel)  // 設定面板可能疊在鍵面上 — toast 要蓋過它
         toastLabel.text = "  \(text)  "
         toastLabel.isHidden = false
         toastLabel.alpha = 1

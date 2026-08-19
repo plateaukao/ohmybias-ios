@@ -12,6 +12,7 @@ enum MemoryBudget {
     static let reverseTable: Int = 4    // CINTable reverse lookup (lazy)
     static let uiOverhead: Int = 3      // CandidateBar, KeyboardView, haptics
     static let collectionPanel: Int = 1 // 符號/emoji/顏文字面板（CollectionData 靜態表＋UICollectionView）
+    static let settingsPanel: Int = 10  // ⚙ 設定面板 — 首次載入 SwiftUI runtime（實測約 10MB）
 
     // MARK: - Runtime check
 
