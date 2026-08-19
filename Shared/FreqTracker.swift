@@ -64,7 +64,6 @@ final class FreqTracker {
 
     private func openDB() {
         guard sqlite3_open(path, &db) == SQLITE_OK else {
-            DebugLog.log("FreqTracker sqlite3_open failed: \(path)")
             return
         }
         exec("PRAGMA journal_mode=WAL")
@@ -415,7 +414,7 @@ final class FreqTracker {
         guard FileManager.default.fileExists(atPath: jsonPath) else { return }
         let data: Data
         do { data = try Data(contentsOf: URL(fileURLWithPath: jsonPath)) }
-        catch { DebugLog.log("FreqTracker migrateFromJSON read: \(error.localizedDescription)"); return }
+        catch { return }
         // Backup first
         let backup = dir + "/freq.json.bak"
         if !FileManager.default.fileExists(atPath: backup) {
@@ -430,7 +429,7 @@ final class FreqTracker {
                 let legacyFreq = try JSONDecoder().decode([String: [String: Int]].self, from: data)
                 importJSON(JSONStorage(freq: legacyFreq, bigram: nil))
                 try? FileManager.default.removeItem(atPath: jsonPath)
-            } catch { DebugLog.log("FreqTracker migrateFromJSON decode: \(error.localizedDescription)") }
+            } catch {}
         }
     }
 
@@ -473,13 +472,13 @@ final class FreqTracker {
         guard let url = Self.iCloudFreqURL else { return }
         let data: Data
         do { data = try Data(contentsOf: url) }
-        catch { DebugLog.log("FreqTracker mergeFromiCloud read: \(error.localizedDescription)"); return }
+        catch { return }
         do {
             let remote = try JSONDecoder().decode(JSONStorage.self, from: data)
             importJSON(remote)
             resyncCachesFromDB()
         }
-        catch { DebugLog.log("FreqTracker mergeFromiCloud decode: \(error.localizedDescription)") }
+        catch {}
     }
 
     /// bgQueue 專用：pending 先落盤 → DB 整份重讀 → 換掉記憶體（iCloud merge 後同步）

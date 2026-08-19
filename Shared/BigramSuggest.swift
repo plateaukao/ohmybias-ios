@@ -20,7 +20,7 @@ final class BigramSuggest {
         guard let p = path else { return }
         let d: Data
         do { d = try Data(contentsOf: URL(fileURLWithPath: p), options: .mappedIfSafe) }
-        catch { DebugLog.log("BigramSuggest: failed to load \(p): \(error)"); return }
+        catch { return }
         guard d.count >= 12, d[0] == 0x42, d[1] == 0x47, d[2] == 0x4D, d[3] == 0x4D else { return }
         keyCount = Int(d.u32(4))
         keysOffset = 8

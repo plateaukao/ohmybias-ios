@@ -33,7 +33,7 @@ final class WikiCorpus {
         guard let p = resolvePath(name: "phrases", ext: "bin") else { return }
         let d: Data
         do { d = try Data(contentsOf: URL(fileURLWithPath: p), options: .mappedIfSafe) }
-        catch { DebugLog.log("WikiCorpus loadPhrases: \(error.localizedDescription)"); return }
+        catch { return }
         guard d.count >= 12, d[0] == 0x50, d[1] == 0x48, d[2] == 0x4D, d[3] == 0x4D else { return }
         phKeyCount = Int(d.u32(4))
         phKeysOff = 8

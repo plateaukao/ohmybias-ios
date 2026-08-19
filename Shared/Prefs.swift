@@ -89,12 +89,6 @@ struct OhMyBiasPrefs {
         set { defaults.set(min(max(newValue, 0.85), 1.4), forKey: "keyboardHeightScale") }
     }
 
-    /// Debug 記錄至 sharedDir/debug.log
-    static var debugMode: Bool {
-        get { defaults.object(forKey: "debugMode") as? Bool ?? false }
-        set { defaults.set(newValue, forKey: "debugMode") }
-    }
-
     /// 詞庫開關 — 極簡版僅萌典詞組，預設開啟
     static func domainEnabled(_ key: String) -> Bool {
         defaults.object(forKey: key) as? Bool ?? (key == "domain_phrases")

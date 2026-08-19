@@ -101,7 +101,6 @@ final class CINTable {
             }
         }
         for k in overlay.keys { if k.count > maxCodeLength { maxCodeLength = k.count } }
-        DebugLog.log("OhMyBiasIM: maxCodeLength = \(maxCodeLength)")
     }
 
     /// Load from a .cin text file (compiles to temp .bin first). For tests and on-the-fly use.
@@ -114,7 +113,7 @@ final class CINTable {
             let d = try Data(contentsOf: URL(fileURLWithPath: tmp))
             try? FileManager.default.removeItem(atPath: tmp)
             parseBinData(d)
-        } catch { DebugLog.log("CINTable load(cinPath:) read tmp: \(error.localizedDescription)") }
+        } catch {}
         // If compile failed, fall back to text parse
         if entryCount == 0 {
             parseCINIntoOverlay(path: cinPath)
@@ -139,7 +138,7 @@ final class CINTable {
             let d = try Data(contentsOf: URL(fileURLWithPath: tmp))
             try? FileManager.default.removeItem(atPath: tmp)
             parseBinData(d)
-        } catch { DebugLog.log("CINTable load(path:) read tmp: \(error.localizedDescription)") }
+        } catch {}
         if entryCount == 0 {
             parseCINIntoOverlay(path: path)
         }
@@ -152,7 +151,6 @@ final class CINTable {
             }
         }
         for k in overlay.keys { if k.count > maxCodeLength { maxCodeLength = k.count } }
-        DebugLog.log("OhMyBiasIM: Loaded \(entryCount) bin entries + \(overlay.count) overlay entries from \(path)")
     }
 
     // MARK: - Binary loading
@@ -160,7 +158,7 @@ final class CINTable {
     private func loadBin(path: String) {
         let d: Data
         do { d = try Data(contentsOf: URL(fileURLWithPath: path), options: .mappedIfSafe) }
-        catch { DebugLog.log("CINTable loadBin: \(error.localizedDescription)"); return }
+        catch { return }
         guard d.count >= 128,
               d[0] == 0x43, d[1] == 0x49, d[2] == 0x4E, d[3] == 0x4D else { return }
         parseBinHeader(d)
@@ -301,7 +299,6 @@ final class CINTable {
         let attrs = try? FileManager.default.attributesOfItem(atPath: path)
         let fileSize = attrs?[.size] as? UInt64 ?? 0
         guard fileSize <= 100_000_000 else {
-            DebugLog.log("CIN file too large: \(fileSize) bytes, skipped")
             return
         }
         guard let data = FileManager.default.contents(atPath: path),
@@ -365,7 +362,7 @@ final class CINTable {
             let p = FileManager.default.fileExists(atPath: shared) ? shared : bundled
             guard let data = FileManager.default.contents(atPath: p) else { continue }
             do { self[keyPath: kp] = try JSONDecoder().decode([String: String].self, from: data) }
-            catch { DebugLog.log("CINTable loadCharMaps \(name): \(error.localizedDescription)") }
+            catch {}
         }
     }
 

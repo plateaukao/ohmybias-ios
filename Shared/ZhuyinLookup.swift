@@ -21,15 +21,15 @@ final class ZhuyinLookup {
         guard !loaded else { return }
         guard MemoryBudget.canAfford(MemoryBudget.zhuyinLookup) else { return }
         guard let p = dataPath("zhuyin_data", "json") else {
-            DebugLog.log("ZhuyinLookup: zhuyin_data.json not found"); return
+            return
         }
         let data: Data
         do { data = try Data(contentsOf: URL(fileURLWithPath: p)) }
-        catch { DebugLog.log("ZhuyinLookup read zhuyin_data: \(error.localizedDescription)"); return }
+        catch { return }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let z2c = json["zhuyin_to_chars"] as? [String: [String]],
               let c2z = json["char_to_zhuyins"] as? [String: [String]] else {
-            DebugLog.log("ZhuyinLookup: zhuyin_data.json parse failed"); return
+            return
         }
         zhuyinToChars = z2c; charToZhuyins = c2z
         loaded = true
@@ -38,18 +38,15 @@ final class ZhuyinLookup {
                 let fd = try Data(contentsOf: URL(fileURLWithPath: fp))
                 if let freq = (try? JSONSerialization.jsonObject(with: fd)) as? [String: Int] {
                     charFreq = freq
-                } else {
-                    DebugLog.log("ZhuyinLookup: char_freq.json parse failed")
                 }
-            } catch { DebugLog.log("ZhuyinLookup read char_freq: \(error.localizedDescription)") }
+            } catch {}
         }
-        DebugLog.log("OhMyBiasIM: zhuyin loaded — \(z2c.count) readings, \(c2z.count) chars, \(charFreq.count) freq")
         if let pp = dataPath("pinyin_data", "json") {
             do {
                 let pd = try Data(contentsOf: URL(fileURLWithPath: pp))
                 if let pj = try? JSONSerialization.jsonObject(with: pd) as? [String: Any],
                    let p2c = pj["pinyin_to_chars"] as? [String: [String]] { pinyinToChars = p2c }
-            } catch { DebugLog.log("ZhuyinLookup read pinyin_data: \(error.localizedDescription)") }
+            } catch {}
         }
     }
 

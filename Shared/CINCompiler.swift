@@ -97,7 +97,6 @@ enum CINCompiler {
         var valIdx = Data()
         for e in valEntries {
             guard e.off <= Int(UInt16.max) else {
-                DebugLog.log("CINCompiler: val offset \(e.off) exceeds UInt16 range, clamping")
                 valIdx.appendU16(UInt16.max)
                 valIdx.append(UInt8(min(e.cnt, 255)))
                 valIdx.append(0)

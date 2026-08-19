@@ -24,7 +24,6 @@ struct ContentView: View {
     @AppStorage("hapticFeedback", store: OhMyBiasPrefs.defaults) private var hapticFeedback = true
     @AppStorage("homophoneMultiReading", store: OhMyBiasPrefs.defaults) private var homophoneMultiReading = false
     @AppStorage("keyboardHeightScale", store: OhMyBiasPrefs.defaults) private var keyboardHeightScale = 1.0
-    @AppStorage("debugMode", store: OhMyBiasPrefs.defaults) private var debugMode = false
 
     var body: some View {
         NavigationStack {
@@ -108,10 +107,6 @@ struct ContentView: View {
                     ,,H 完整說明
                     """)
                     .font(.system(.footnote, design: .monospaced))
-                }
-
-                Section("進階") {
-                    Toggle("Debug 記錄", isOn: $debugMode)
                 }
             }
             .navigationTitle("OhMyBias 米")

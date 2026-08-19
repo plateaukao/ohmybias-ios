@@ -344,7 +344,6 @@ final class InputEngine {
     } }
 
     func selectCandidate(at index: Int) { sync {
-        DebugLog.log("OhMyBiasKB: selectCandidate idx=\(index) count=\(_currentCandidates.count) composing='\(_composing)' zhuyin=\(_isZhuyinMode ? 1 : 0)")
         guard index < _currentCandidates.count else { return }
         // Pin mode: pick candidate into pinned list
         if _isPinMode && !_pinCode.isEmpty {
@@ -559,7 +558,6 @@ final class InputEngine {
 
     private func _handleSameSound() {
         let results = zhuyinLookup.lookup(_sameSoundBase)
-        DebugLog.log("OhMyBiasKB: handleSameSound base=\(_sameSoundBase) results=\(results.count)")
         guard let first = results.first else { _resetComposing(); return }
         _currentCandidates = zhuyinLookup.sortByFreq(first.chars)
         _composing = _sameSoundBase
@@ -787,7 +785,6 @@ final class InputEngine {
     }
 
     private func _selectCandidateImpl(at index: Int) {
-        DebugLog.log("OhMyBiasKB: selectCandidate idx=\(index) count=\(_currentCandidates.count) composing='\(_composing)' zhuyin=\(_isZhuyinMode ? 1 : 0)")
         guard index < _currentCandidates.count else { return }
         if _isZhuyinMode {
             let full = _currentCandidates[index]
@@ -865,14 +862,11 @@ final class InputEngine {
     ]
 
     private func _commitText(_ text: String) {
-        DebugLog.log("OhMyBiasKB: commitText='\(text)' composing='\(_composing)' sameSound=\(_isSameSoundMode ? 1 : 0)")
         // Same-sound step 1 → step 2
         if _isSameSoundMode && _sameSoundBase.isEmpty && text.count == 1 {
             let results = zhuyinLookup.lookup(text)
-            DebugLog.log("OhMyBiasKB: sameSound lookup char=\(text) results=\(results.count)")
             if !results.isEmpty {
                 _sameSoundBase = text
-                DebugLog.log("OhMyBiasKB: sameSound base=\(text) zhuyin=\(results.first?.zhuyin ?? "?") chars=\(results.first?.chars.count ?? 0)")
                 _handleSameSound(); return
             }
         }
