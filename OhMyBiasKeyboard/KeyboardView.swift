@@ -98,6 +98,15 @@ final class KeyboardView: UIView {
         reloadKeys()
     }
 
+    /// 收鍵盤／記憶體警告時呼叫 — 拆掉面板並回到字母頁，讓 cell 與圖層釋放。
+    /// 面板頁不會跨 session 保留（本來每次回鍵盤也都是從字母頁開始）
+    func releasePanels() {
+        guard panelView != nil || currentPage != .letters else { return }
+        currentPage = .letters
+        pageBeforeToolbarToggle = nil
+        reloadKeys()
+    }
+
     func toggleToolbarPage(_ page: Page) {
         if currentPage == page {
             currentPage = pageBeforeToolbarToggle ?? .letters
@@ -348,29 +357,39 @@ final class KeyboardView: UIView {
 
     private var panelView: CollectionPanelView?
 
-    /// 依面板頁取內容並嘗試安裝；記憶體不足時回傳 false（不動 rowsStack）
+    /// 依面板頁取內容並嘗試安裝；記憶體不足時回傳 false（不動 rowsStack）。
+    /// 分類內容一律以 closure 傳入 — 點到該分類才取值（見 CollectionPanelView）
     private func installPanel(for page: Page) -> Bool {
         switch page {
         case .symbolPanel:
-            return installPanel(CollectionData.symbols, fontSize: KeyboardTheme.panelSymbolFontSize)
+            return installPanel(lazySections(CollectionData.symbols),
+                                fontSize: KeyboardTheme.panelSymbolFontSize)
         case .emoji:
             // 「常用」分類 = 最近使用紀錄，排在「表情」前；沒紀錄就不顯示
             let recent = RecentEmojis.shared.all()
-            let sections = recent.isEmpty ? CollectionData.emojis : [("常用", recent)] + CollectionData.emojis
+            var sections = lazySections(CollectionData.emojis)
+            if !recent.isEmpty { sections.insert(("常用", { recent }), at: 0) }
             return installPanel(sections, fontSize: KeyboardTheme.panelEmojiFontSize, recordRecent: true)
         case .kaomojis:
-            return installPanel(CollectionData.kaomojis, fontSize: KeyboardTheme.panelKaomojiFontSize)
+            return installPanel(lazySections(CollectionData.kaomojis),
+                                fontSize: KeyboardTheme.panelKaomojiFontSize)
         case .phrases:
             // ♥ 常用語面板 — 內容為 user_phrases.txt 自訂詞，點選直接上屏
-            UserPhrases.shared.reload()
-            return installPanel([("常用語", UserPhrases.shared.allPhrases())],
-                                fontSize: KeyboardTheme.panelKaomojiFontSize)
+            return installPanel([("常用語", {
+                UserPhrases.shared.reload()
+                return UserPhrases.shared.allPhrases()
+            })], fontSize: KeyboardTheme.panelKaomojiFontSize)
         default:
             return false
         }
     }
 
-    private func installPanel(_ sections: [(String, [String])], fontSize: CGFloat, recordRecent: Bool = false) -> Bool {
+    /// 靜態分類表 → 延後取值的分類表（索引綁定，取值時才碰該分類的陣列）
+    private func lazySections(_ data: [(String, [String])]) -> [(String, () -> [String])] {
+        data.indices.map { i in (data[i].0, { data[i].1 }) }
+    }
+
+    private func installPanel(_ sections: [(String, () -> [String])], fontSize: CGFloat, recordRecent: Bool = false) -> Bool {
         if !MemoryBudget.canAfford(MemoryBudget.collectionPanel) {
             onPanelMemoryRelief?()
             guard MemoryBudget.canAfford(MemoryBudget.collectionPanel) else { return false }

@@ -53,17 +53,32 @@ final class CINTable {
         _longestCodes = r; return r
     }
 
-    private(set) var t2s: [String: String] = [:]
-    private(set) var s2t: [String: String] = [:]
+    // 繁簡對照表 — 只有簡繁轉換模式（,,S/,,TS/,,ST）與拼音簡體顯示會用到，
+    // 故改為第一次存取才載入（啟動時載入等於讓從不打簡體的人白付 ~1.8MB）
+    private var _t2s: [String: String]?
+    private var _s2t: [String: String]?
+    var t2s: [String: String] {
+        if let c = _t2s { return c }
+        loadCharMaps()
+        return _t2s ?? [:]
+    }
+    var s2t: [String: String] {
+        if let c = _s2t { return c }
+        loadCharMaps()
+        return _s2t ?? [:]
+    }
     private(set) var selKeys: [Character] = Array("1234567890")
     private(set) var cinName: String = ""
     var isEmpty: Bool { entryCount == 0 && overlay.isEmpty }
     private(set) var maxCodeLength: Int = 4
 
+    /// 釋放可重建的快取 — 全部都是 lazy 載入，下次用到會自動重建
     func releaseOptionalCaches() {
         _reverseTable = nil
         _shortestCodes = nil
         _longestCodes = nil
+        _t2s = nil
+        _s2t = nil
     }
 
     // MARK: - Load
@@ -71,7 +86,7 @@ final class CINTable {
     func reload() {
         binData = nil; entryCount = 0; overlay = [:]
         _reverseTable = nil; _shortestCodes = nil; _longestCodes = nil
-        t2s = [:]; s2t = [:]
+        _t2s = nil; _s2t = nil
 
         // 1. Try mmap binary from shared dir
         let userBin = AppConstants.sharedDir + "/liu.bin"
@@ -90,8 +105,7 @@ final class CINTable {
         }
         // 3. Extras
         loadExtras()
-        // 4. Char maps
-        loadCharMaps()
+        // 4. 繁簡對照表不在此載入 — 交給 t2s/s2t 存取器 lazy 觸發
         // 5. maxCodeLength
         maxCodeLength = 4
         if let d = binData {
@@ -142,7 +156,7 @@ final class CINTable {
         if entryCount == 0 {
             parseCINIntoOverlay(path: path)
         }
-        loadCharMaps()
+        // 繁簡對照表交給 t2s/s2t 存取器 lazy 觸發
         maxCodeLength = 4
         if let d = binData {
             for i in 0..<entryCount {
@@ -353,16 +367,21 @@ final class CINTable {
         }
     }
 
+    /// 載入繁簡對照表 — 由 t2s/s2t 存取器觸發，兩張表一起載（同時只會用到其一，
+    /// 但兩者成本相當且常一起出現）。失敗時填空表，避免每次存取重試 I/O。
     private func loadCharMaps() {
         let sharedDir = AppConstants.sharedDir + "/"
         let bundlePath = (Bundle.main.resourcePath ?? "") + "/"
-        for (name, kp) in [("t2s", \CINTable.t2s), ("s2t", \CINTable.s2t)] {
+        for name in ["t2s", "s2t"] {
             let shared = sharedDir + name + ".json"
             let bundled = bundlePath + name + ".json"
             let p = FileManager.default.fileExists(atPath: shared) ? shared : bundled
-            guard let data = FileManager.default.contents(atPath: p) else { continue }
-            do { self[keyPath: kp] = try JSONDecoder().decode([String: String].self, from: data) }
-            catch {}
+            var map: [String: String] = [:]
+            if let data = FileManager.default.contents(atPath: p),
+               let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
+                map = decoded
+            }
+            if name == "t2s" { _t2s = map } else { _s2t = map }
         }
     }
 

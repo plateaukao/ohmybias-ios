@@ -45,8 +45,20 @@ final class KeyboardViewController: UIInputViewController {
         super.viewWillDisappear(animated)
         // 收鍵盤時把未寫入的字頻紀錄落盤 — extension 被殺也不掉學習資料
         engine.freqTracker.flushAll()
-        // 記憶體偏高時釋放可選快取（反查表等）— 快取不清會活到行程被殺為止
+        // 面板留著沒人看，但 cell／圖層／SwiftUI 會一直佔記憶體 — 收鍵盤即拆
+        if let host = settingsPanelHost { dismissSettingsPanel(host) }
+        keyboardView.releasePanels()
+        // 記憶體偏高時釋放可選快取（反查表、繁簡表、注音表）— 不清會活到行程被殺為止
         MemoryBudget.trimIfNeeded(cinTable: engine.cinTable)
+    }
+
+    /// 系統送記憶體警告 = 被 jetsam 殺掉前的最後機會，能放的全放。
+    /// 拆掉面板同時也讓 UIKit 有機會回收 emoji 字形等 process-wide 快取。
+    override func didReceiveMemoryWarning() {
+        super.didReceiveMemoryWarning()
+        if let host = settingsPanelHost { dismissSettingsPanel(host) }
+        keyboardView.releasePanels()
+        MemoryBudget.releaseAll(cinTable: engine.cinTable)
     }
 
     // 深淺色：完全跟隨繼承的 trait（extension window 會即時跟系統外觀），

@@ -8,19 +8,24 @@ final class CollectionPanelView: UIView {
     var onBack: (() -> Void)?
     var onBackspace: (() -> Void)?
 
-    private let sections: [(String, [String])]
+    /// 分類只帶標題與取值 closure — 內容點到該分類才取，切走就丟掉，
+    /// 避免所有分類的 cell／字形一次全部進駐（第 0 個分類是預設顯示，永久保留）
+    private let sections: [(String, () -> [String])]
     private let itemFontSize: CGFloat
     private var currentSection = 0
+    private var currentItems: [String] = []
+    private var firstSectionCache: [String]?
     private var categoryButtons: [UIButton] = []
     private var bottomButtons: [UIButton] = []
     private let categoryScroll = UIScrollView()
     private let categoryStack = UIStackView()
     private var collectionView: UICollectionView!
 
-    init(sections: [(String, [String])], itemFontSize: CGFloat) {
+    init(sections: [(String, () -> [String])], itemFontSize: CGFloat) {
         self.sections = sections
         self.itemFontSize = itemFontSize
         super.init(frame: .zero)
+        loadCurrentSection()
         backgroundColor = KeyboardTheme.panelRightBackground
 
         // 左欄分類
@@ -115,8 +120,20 @@ final class CollectionPanelView: UIView {
         }
     }
 
+    /// 取目前分類的內容；第 0 個分類（預設顯示）快取起來，其餘切走即丟
+    private func loadCurrentSection() {
+        guard currentSection < sections.count else { currentItems = []; return }
+        if currentSection == 0 {
+            if firstSectionCache == nil { firstSectionCache = sections[0].1() }
+            currentItems = firstSectionCache ?? []
+        } else {
+            currentItems = sections[currentSection].1()
+        }
+    }
+
     @objc private func didTapCategory(_ sender: UIButton) {
         currentSection = sender.tag
+        loadCurrentSection()
         highlightCategory()
         collectionView.reloadData()
         collectionView.setContentOffset(.zero, animated: false)
@@ -137,17 +154,18 @@ final class CollectionPanelView: UIView {
 extension CollectionPanelView: UICollectionViewDataSource, UICollectionViewDelegate {
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        sections[currentSection].1.count
+        currentItems.count
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cell", for: indexPath) as! PanelCell
-        cell.configure(sections[currentSection].1[indexPath.item], fontSize: itemFontSize)
+        cell.configure(currentItems[indexPath.item], fontSize: itemFontSize)
         return cell
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        onInsert?(sections[currentSection].1[indexPath.item])
+        guard indexPath.item < currentItems.count else { return }
+        onInsert?(currentItems[indexPath.item])
     }
 }
 

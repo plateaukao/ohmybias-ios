@@ -17,6 +17,17 @@ final class ZhuyinLookup {
         return Bundle.main.path(forResource: name, ofType: ext)
     }
 
+    /// 釋放注音/拼音/字頻表 — 只有注音、拼音、同音字模式用得到，離開後或
+    /// 記憶體吃緊時可放掉；下次進入該模式 ensureLoaded() 會重新載入。
+    func release() {
+        guard loaded else { return }
+        charToZhuyins = [:]
+        zhuyinToChars = [:]
+        pinyinToChars = [:]
+        charFreq = [:]
+        loaded = false
+    }
+
     private func ensureLoaded() {
         guard !loaded else { return }
         guard MemoryBudget.canAfford(MemoryBudget.zhuyinLookup) else { return }

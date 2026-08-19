@@ -37,7 +37,13 @@ enum MemoryBudget {
 
     /// Call this when memory is tight — release optional caches.
     static func trimIfNeeded(cinTable: CINTable) {
-        guard currentMB > 65 else { return }
+        guard currentMB > 55 else { return }
+        releaseAll(cinTable: cinTable)
+    }
+
+    /// 無條件釋放所有可重建的快取（記憶體警告時用 — 此時沒有猶豫的餘地）
+    static func releaseAll(cinTable: CINTable) {
         cinTable.releaseOptionalCaches()
+        ZhuyinLookup.shared.release()
     }
 }
