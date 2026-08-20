@@ -201,9 +201,13 @@ final class KeyboardViewController: UIInputViewController {
         case .newline:
             handleReturnKey()
         case .symbol(let s):
-            // 符號頁直接送出（不經引擎組字）
+            // 符號頁直接送出（不經引擎組字）；成對標點仍補右半並把游標放中間
             engine.handleEscape()
-            textDocumentProxy.insertText(s)
+            if let right = engine.pairedRight(s) {
+                commitPair(s, right)
+            } else {
+                textDocumentProxy.insertText(s)
+            }
         case .toggleLanguage:
             engine.toggleEnglishMode()
             keyboardView.isEnglishMode = engine.isEnglishMode
@@ -427,10 +431,13 @@ extension KeyboardViewController: InputEngineDelegate {
     }
 
     func engineDidCommitPair(_ left: String, _ right: String) {
-        DispatchQueue.main.async {
-            self.textDocumentProxy.insertText(left + right)
-            self.textDocumentProxy.adjustTextPosition(byCharacterOffset: -right.count)
-        }
+        DispatchQueue.main.async { self.commitPair(left, right) }
+    }
+
+    /// 送出成對標點並把游標移回中間（引擎送字與符號鍵共用；已在主執行緒）
+    private func commitPair(_ left: String, _ right: String) {
+        textDocumentProxy.insertText(left + right)
+        textDocumentProxy.adjustTextPosition(byCharacterOffset: -right.count)
     }
 
     func engineDidClearComposing() {

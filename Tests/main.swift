@@ -179,6 +179,25 @@ func testEnginePunctuationPairing() {
     check(mock.commitPairs.last?.0 == "「" && mock.commitPairs.last?.1 == "」", "「」 pair")
 }
 
+/// 符號鍵不經組字流程，改問 pairedRight —— 半形括號/雙引號也要配，單引號不配
+func testEnginePairedRight() {
+    let (engine, _) = makeEngine()
+    checkEqual(engine.pairedRight("（"), "）", "（ pairs")
+    checkEqual(engine.pairedRight("【"), "】", "【 pairs")
+    checkEqual(engine.pairedRight("("), ")", "half-width ( pairs")
+    checkEqual(engine.pairedRight("["), "]", "half-width [ pairs")
+    checkEqual(engine.pairedRight("{"), "}", "half-width { pairs")
+    checkEqual(engine.pairedRight("\""), "\"", "double quote pairs")
+    checkEqual(engine.pairedRight("'"), nil, "single quote does not pair")
+    checkEqual(engine.pairedRight("）"), nil, "right half does not pair")
+    checkEqual(engine.pairedRight("（）"), nil, "multi-char does not pair")
+
+    var offPrefs = MockPrefs()
+    offPrefs.punctuationPairing = false
+    let (offEngine, _) = makeEngine(prefs: offPrefs)
+    checkEqual(offEngine.pairedRight("（"), nil, "pairing off → no right half")
+}
+
 func testEngineCommaCommandUnknown() {
     let (engine, mock) = makeEngine()
     engine.handleLetter(",")
@@ -323,6 +342,7 @@ testEngineOverflowAutoCommit()
 testEngineBackspaceAndEscape()
 testEngineVRSF()
 testEnginePunctuationPairing()
+testEnginePairedRight()
 testEngineCommaCommandUnknown()
 testEngineModeSwitch()
 testEngineSetEnglishMode()

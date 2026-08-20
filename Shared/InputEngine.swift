@@ -821,9 +821,23 @@ final class InputEngine {
         }
     }
 
+    /// Half-width brackets and the double quote pair too (code, English parens).
+    /// The single quote is deliberately left out — English contractions (don't)
+    /// and possessives (Daniel's) would get a bogus right half.
     private static let punctuationPairs: [String: String] = [
         "「": "」", "（": "）", "『": "』", "【": "】", "《": "》", "〈": "〉",
+        "(": ")", "[": "]", "{": "}", "\"": "\"",
     ]
+
+    /// Right half of a pairing punctuation, or nil. Symbol keys (symbol page /
+    /// symbol panel / swipe) insert directly without going through composing,
+    /// yet still need the right half — otherwise the very same 【 pairs when
+    /// typed by code and does not when tapped on the symbol page.
+    /// Reads no mutable state, so it needs no lock.
+    func pairedRight(_ text: String) -> String? {
+        guard prefs.punctuationPairing, text.count == 1 else { return nil }
+        return Self.punctuationPairs[text]
+    }
 
     private func _commitText(_ text: String) {
         // Same-sound step 1 → step 2
