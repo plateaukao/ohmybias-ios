@@ -54,6 +54,18 @@
 			);
 			target = 0A0000000000000000000011 /* OhMyBiasKeyboard */;
 		};
+		0A0000000000000000000026 /* Exceptions for "Resources" folder in "OhMyBias" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				char_freq.bin,
+				phrases.bin,
+				pinyin_data.bin,
+				s2t.json,
+				t2s.json,
+				zhuyin_data.bin,
+			);
+			target = 0A0000000000000000000010 /* OhMyBias */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -80,6 +92,9 @@
 		};
 		0A0000000000000000000023 /* Resources */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0A0000000000000000000026 /* Exceptions for "Resources" folder in "OhMyBias" target */,
+			);
 			path = Resources;
 			sourceTree = "<group>";
 		};
