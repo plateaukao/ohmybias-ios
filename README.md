@@ -62,6 +62,6 @@ Tests/             # 引擎測試（swiftc + check/checkEqual）
 | 檔案 | 來源 | 授權 |
 |------|------|------|
 | `phrases.bin` | [萌典](https://www.moedict.tw/)（教育部國語辭典） | CC0 |
-| `zhuyin_data.json` / `pinyin_data.json` / `char_freq.json` | Yabomish 上游整理 | 同上游 |
+| `zhuyin_data.bin` / `pinyin_data.bin` / `char_freq.bin`（ZYM2/PYM2/CFM2，由上游 JSON 經 ohmybias-android `tools/gen_data_bins.py` 轉製） | Yabomish 上游整理 | 同上游 |
 | `s2t.json` / `t2s.json` | Yabomish 上游整理 | 同上游 |
 | 鍵盤版面／符號分類 | Hamster 2 皮膚「蝦米輸入法」（sweetlime.cskin，作者 Ryan）移植 | 見原皮膚 |

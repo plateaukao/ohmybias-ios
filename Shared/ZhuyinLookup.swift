@@ -1,9 +1,18 @@
 import Foundation
 
-/// 同音字查詢：字 → 注音 → 同音字（按字頻排序）
+/// 同音字查詢：字 → 注音 → 同音字（按字頻排序）。
+/// 資料優先走 mmap 二進位（zhuyin_data.bin / pinyin_data.bin / char_freq.bin — v2 格式 ZYM2/PYM2/CFM2，
+/// 零 heap、零解析；讀取端 DataMaps.swift，格式見 ohmybias-android tools/gen_data_bins.py），
+/// 找不到 .bin 時回退舊版 JSON（使用者 sharedDir 自帶資料的相容路徑）。
 final class ZhuyinLookup {
     static let shared = ZhuyinLookup()
 
+    // mmap 二進位
+    private var zhuyinBin: ZhuyinTable?
+    private var pinyinBin: PinyinTable?
+    private var freqBin: CharFreqMap?
+
+    // JSON fallback
     private var charToZhuyins: [String: [String]] = [:]
     private var zhuyinToChars: [String: [String]] = [:]
     private var pinyinToChars: [String: [String]] = [:]
@@ -19,8 +28,12 @@ final class ZhuyinLookup {
 
     /// 釋放注音/拼音/字頻表 — 只有注音、拼音、同音字模式用得到，離開後或
     /// 記憶體吃緊時可放掉；下次進入該模式 ensureLoaded() 會重新載入。
+    /// （mmap 版本身不佔 heap，放掉的是已觸碰的頁面與 JSON fallback 的字典。）
     func release() {
         guard loaded else { return }
+        zhuyinBin = nil
+        pinyinBin = nil
+        freqBin = nil
         charToZhuyins = [:]
         zhuyinToChars = [:]
         pinyinToChars = [:]
@@ -31,6 +44,32 @@ final class ZhuyinLookup {
     private func ensureLoaded() {
         guard !loaded else { return }
         guard MemoryBudget.canAfford(MemoryBudget.zhuyinLookup) else { return }
+        if loadBins() {
+            loaded = true
+            return
+        }
+        loadJsonFallback()
+    }
+
+    private func mapped(_ path: String) -> Data? {
+        try? Data(contentsOf: URL(fileURLWithPath: path), options: .mappedIfSafe)
+    }
+
+    /// zhuyin_data.bin（ZYM2）為主；pinyin_data.bin（PYM2，別名指向 ZYM2 音節）與 char_freq.bin（CFM2）各自獨立檔
+    private func loadBins() -> Bool {
+        guard let zp = dataPath("zhuyin_data", "bin"), let zd = mapped(zp),
+              let zt = ZhuyinTable.of(zd) else { return false }
+        zhuyinBin = zt
+        if let pp = dataPath("pinyin_data", "bin"), let pd = mapped(pp) {
+            pinyinBin = PinyinTable.of(pd, zhuyin: zt)
+        }
+        if let fp = dataPath("char_freq", "bin"), let fd = mapped(fp) {
+            freqBin = CharFreqMap.of(fd)
+        }
+        return true
+    }
+
+    private func loadJsonFallback() {
         guard let p = dataPath("zhuyin_data", "json") else {
             return
         }
@@ -61,11 +100,28 @@ final class ZhuyinLookup {
         }
     }
 
+    // MARK: - 內部查詢（bin 優先）
+
+    private func freqOf(_ char: String) -> Int {
+        if let f = freqBin { return f.get(char) }
+        return charFreq[char] ?? 0
+    }
+
+    private func zhuyinsOf(_ char: String) -> [String] {
+        if let z = zhuyinBin { return z.zhuyinsOf(char) }
+        return charToZhuyins[char] ?? []
+    }
+
+    private func pinyinLookup(_ key: String) -> [String] {
+        if let p = pinyinBin { return p.get(key) }
+        return pinyinToChars[key] ?? []
+    }
+
     // MARK: - Sort
 
     func sortByFreq(_ chars: [String]) -> [String] {
         ensureLoaded()
-        return chars.sorted { (charFreq[$0] ?? 0) > (charFreq[$1] ?? 0) }
+        return chars.sorted { freqOf($0) > freqOf($1) }
     }
 
     /// Backward-compat overloads — prevChar no longer used after bigram removal
@@ -77,10 +133,11 @@ final class ZhuyinLookup {
 
     func lookup(_ char: String) -> [(zhuyin: String, chars: [String])] {
         ensureLoaded()
-        guard let zhuyins = charToZhuyins[char] else { return [] }
+        let zhuyins = zhuyinsOf(char)
+        guard !zhuyins.isEmpty else { return [] }
         // char_to_zhuyins 的順序 = 常用讀音在前，直接保留
         let all = zhuyins.compactMap { zy -> (zhuyin: String, chars: [String])? in
-            guard let raw = zhuyinToChars[zy] else { return nil }
+            let raw = charsForZhuyin(zy)
             let filtered = raw.filter { $0 != char }
             guard !filtered.isEmpty else { return nil }
             return (zy, filtered)
@@ -99,6 +156,7 @@ final class ZhuyinLookup {
 
     func charsForZhuyin(_ zhuyin: String) -> [String] {
         ensureLoaded()
+        if let z = zhuyinBin { return z.charsForZhuyin(zhuyin) }
         return zhuyinToChars[zhuyin] ?? []
     }
 
@@ -107,9 +165,13 @@ final class ZhuyinLookup {
 
     func charsForPinyin(_ pinyin: String) -> [String] {
         ensureLoaded()
-        if let chars = pinyinToChars[pinyin], !chars.isEmpty { return chars }
+        let direct = pinyinLookup(pinyin)
+        if !direct.isEmpty { return direct }
         let converted = pinyin.replacingOccurrences(of: "v", with: "ü")
-        if converted != pinyin, let chars = pinyinToChars[converted], !chars.isEmpty { return chars }
+        if converted != pinyin {
+            let c = pinyinLookup(converted)
+            if !c.isEmpty { return c }
+        }
         return []
     }
 }

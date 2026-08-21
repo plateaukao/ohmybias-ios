@@ -12,7 +12,7 @@ TEST_SOURCES=$(find Tests -name '*.swift' | sort)
 BINDIR=/tmp/ohmybias_ios_tests
 mkdir -p "$BINDIR"
 # 測試 binary 的 Bundle.main 即其所在目錄 — 把資料檔放在旁邊
-cp Resources/phrases.bin Resources/s2t.json Resources/t2s.json "$BINDIR/"
+cp Resources/phrases.bin Resources/zhuyin_data.bin Resources/pinyin_data.bin Resources/char_freq.bin Resources/s2t.json Resources/t2s.json "$BINDIR/"
 
 echo "Compiling test runner..."
 swiftc \

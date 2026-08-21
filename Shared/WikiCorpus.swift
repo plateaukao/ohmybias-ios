@@ -96,9 +96,7 @@ final class WikiCorpus {
             guard pos >= 0, pos < d.count else { break }
             let units = Int(d[pos]); pos += 1
             guard pos + units * 2 <= d.count else { break }
-            var codeUnits = [UInt16](repeating: 0, count: units)
-            for j in 0..<units { codeUnits[j] = d.u16(pos + j * 2) }
-            r.append(first + String(utf16CodeUnits: codeUnits, count: units))
+            r.append(first + d.utf16String(pos, units))
             pos += units * 2
         }
         return r

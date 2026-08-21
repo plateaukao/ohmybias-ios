@@ -291,6 +291,43 @@ func testSkinSettingsParseFlat() {
 
 // === 聯想（基本詞組）tests ===
 
+/// v2 資料表（ZYM2 / PYM2 / CFM2）讀取端 — 期望值與 Android DataBinsV2Test 相同（取自 v1 解析結果），
+/// 涵蓋非 BMP 字（surrogate pair）、多讀音順序、拼音別名與內嵌、頻次同分、區塊差值鍵表的命中／未命中。
+func testZhuyinLookupBins() {
+    let zl = ZhuyinLookup()
+    let ba = zl.charsForZhuyin("ㄅㄚ")
+    checkEqual(ba.count, 15, "ㄅㄚ has 15 chars")
+    checkEqual(Array(ba.prefix(5)), ["八", "巴", "吧", "扒", "芭"], "ㄅㄚ order")
+    let bo2 = zl.charsForZhuyin("ㄅㄛˊ")
+    checkEqual(bo2.count, 62, "ㄅㄛˊ has 62 chars")
+    check(bo2.contains("\u{29C5A}"), "𩱚 (surrogate pair) kept as one char")
+    check(bo2.allSatisfy { $0.unicodeScalars.count == 1 }, "every entry is one code point")
+    check(zl.charsForZhuyin("ㄅㄨㄅㄨ").isEmpty, "unknown syllable → empty")
+
+    let sorted = zl.sortByFreq(["龘", "我", "的", "A"])
+    checkEqual(sorted, ["的", "我", "龘", "A"], "freq order 的 > 我 > 龘 > unknown")
+    checkEqual(zl.sortByFreq(["㑳", "扦"]), ["㑳", "扦"], "equal freq keeps input order")
+    checkEqual(zl.sortByFreq(["A", "\u{20089}"]), ["\u{20089}", "A"], "𠂉 U+20089 non-BMP has freq")
+
+    MemoryBudget.bypassChecks = true
+    let prev = OhMyBiasPrefs.homophoneMultiReading
+    OhMyBiasPrefs.homophoneMultiReading = true
+    let san = zl.lookup("三")
+    checkEqual(san.map { $0.zhuyin }, ["ㄙㄢ", "ㄙㄚ", "ㄙㄢˋ"], "三 readings in stored order")
+    check(san.allSatisfy { !$0.chars.contains("三") }, "homophones exclude self")
+    checkEqual(zl.lookup("\u{20065}").map { $0.zhuyin }, ["ㄍㄨㄞˇ"], "𠁥 U+20065 non-BMP key via ext section")
+    check(zl.lookup("A").isEmpty, "unknown char → no readings")
+    check(zl.lookup("三三").isEmpty, "multi-char → no readings")
+    OhMyBiasPrefs.homophoneMultiReading = prev
+
+    checkEqual(zl.charsForPinyin("ba1"), ba, "pinyin alias → same list as ㄅㄚ")
+    let yu2 = zl.charsForPinyin("yu2")
+    checkEqual(yu2.count, 92, "yu2 inline list (ㄧㄡ+ㄩ merged)")
+    checkEqual(Array(yu2.prefix(3)), ["由", "遊", "游"], "yu2 order")
+    checkEqual(Array(zl.charsForPinyin("lv2").prefix(3)), ["驢", "閭", "櫚"], "lv → lü fallback")
+    check(zl.charsForPinyin("zzz").isEmpty, "unknown pinyin → empty")
+}
+
 func testWikiCorpusPhrases() {
     let corpus = WikiCorpus.shared
     check(corpus.domainBinCount == 1, "phrases.bin loaded")
@@ -355,6 +392,7 @@ testEngineSetEnglishMode()
 testSkinSettingsParse()
 testSkinSettingsParseFlat()
 testWikiCorpusPhrases()
+testZhuyinLookupBins()
 testSuggestionEngineBasic()
 testEngineSuggestFlow()
 testSuggestDisabled()
