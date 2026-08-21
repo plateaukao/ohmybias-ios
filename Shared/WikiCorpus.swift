@@ -1,12 +1,13 @@
 import Foundation
 
-/// iOS 極簡語料層：只保留萌典詞組（phrases.bin，PHMM 格式，CC0）。
+/// iOS 極簡語料層：只保留萌典詞組（phrases.bin，PHM2 格式，CC0）。
 /// 其餘語料（詞級 n-gram、新聞語料、成語、專業詞典、NER、emoji、地區用詞）不隨附，
 /// API 介面與上游 Yabomish 相同（回傳空結果），讓 SuggestionEngine / CandidateRanker 原始碼不需修改。
 final class WikiCorpus {
     static let shared = WikiCorpus()
 
-    // 萌典詞組（PHMM: header + sorted UTF-32LE 首字 keys + offsets + counts + phrase blob）
+    // 萌典詞組（PHM2: header + sorted u32 首字 keys + u32 offsets + u8 counts + phrase blob；
+    // 詞只存去掉首字的餘字，UTF-16 code unit — 格式見 ohmybias-android tools/convert_phrases_v2.py）
     private var phData: Data?
     private var phKeyCount = 0
     private var phKeysOff = 0
@@ -34,12 +35,12 @@ final class WikiCorpus {
         let d: Data
         do { d = try Data(contentsOf: URL(fileURLWithPath: p), options: .mappedIfSafe) }
         catch { return }
-        guard d.count >= 12, d[0] == 0x50, d[1] == 0x48, d[2] == 0x4D, d[3] == 0x4D else { return }
+        guard d.count >= 12, d[0] == 0x50, d[1] == 0x48, d[2] == 0x4D, d[3] == 0x32 else { return }  // "PHM2"
         phKeyCount = Int(d.u32(4))
         phKeysOff = 8
         phOffsetsOff = phKeysOff + phKeyCount * 4
         phCountsOff = phOffsetsOff + phKeyCount * 4
-        phPhrasesOff = phCountsOff + phKeyCount * 2
+        phPhrasesOff = phCountsOff + phKeyCount
         guard phPhrasesOff <= d.count else { return }
         phData = d
     }
@@ -87,18 +88,18 @@ final class WikiCorpus {
 
     private func readPhrases(_ d: Data, at idx: Int, limit: Int) -> [String] {
         var pos = phPhrasesOff + Int(d.u32(phOffsetsOff + idx * 4))
-        let count = min(Int(d.u16(phCountsOff + idx * 2)), limit)
+        let count = min(Int(d[phCountsOff + idx]), limit)
+        guard let firstScalar = Unicode.Scalar(d.u32(phKeysOff + idx * 4)) else { return [] }
+        let first = String(Character(firstScalar))
         var r: [String] = []
         for _ in 0..<count {
             guard pos >= 0, pos < d.count else { break }
-            let len = Int(d[pos]); pos += 1
-            guard pos + len * 4 <= d.count else { break }
-            var s = ""
-            for _ in 0..<len {
-                if let sc = Unicode.Scalar(d.u32(pos)) { s.append(Character(sc)) }
-                pos += 4
-            }
-            r.append(s)
+            let units = Int(d[pos]); pos += 1
+            guard pos + units * 2 <= d.count else { break }
+            var codeUnits = [UInt16](repeating: 0, count: units)
+            for j in 0..<units { codeUnits[j] = d.u16(pos + j * 2) }
+            r.append(first + String(utf16CodeUnits: codeUnits, count: units))
+            pos += units * 2
         }
         return r
     }

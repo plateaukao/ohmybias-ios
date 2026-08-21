@@ -302,6 +302,12 @@ func testWikiCorpusPhrases() {
     check(comp.allSatisfy { !$0.hasPrefix("明天") }, "completions are remainders")
     let wc = corpus.suggestWordCorpus(prefix: "臺灣", limit: 5)
     check(!wc.isEmpty, "臺灣 has word-corpus completions")
+    // PHM2：首字由鍵接回、餘字 UTF-16 解碼（含三字詞）、非 BMP 鍵（𣘨 U+23628）
+    let tai = corpus.suggestPhrases(after: "臺", limit: 30)
+    checkEqual(tai.count, 30, "臺 has 30 phrases")
+    checkEqual(Array(tai.prefix(4)), ["臺灣", "臺北市", "臺中", "臺南市"], "臺 phrases reconstructed with first char")
+    checkEqual(corpus.suggestPhrases(after: "\u{23628}"), ["\u{23628}橠"], "non-BMP key phrase")
+    check(corpus.suggestPhrases(after: "A").isEmpty, "unknown key → empty")
 }
 
 func testSuggestionEngineBasic() {
