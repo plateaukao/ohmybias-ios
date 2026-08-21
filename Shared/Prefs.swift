@@ -77,6 +77,13 @@ struct OhMyBiasPrefs {
         set { defaults.set(newValue, forKey: "lastEnglishMode") }
     }
 
+    /// 中文（米）模式字母鍵以大寫顯示 — 嘸蝦米字根表慣用大寫，與實體鍵帽一致；
+    /// 只影響鍵面標籤，送出的組字碼不變。英文模式仍依 shift 決定大小寫
+    static var uppercaseLettersInChinese: Bool {
+        get { defaults.object(forKey: "uppercaseLettersInChinese") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "uppercaseLettersInChinese") }
+    }
+
     /// 按鍵觸覺回饋
     static var hapticFeedback: Bool {
         get { defaults.object(forKey: "hapticFeedback") as? Bool ?? true }

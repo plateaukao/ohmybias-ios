@@ -56,6 +56,8 @@ final class KeyboardView: UIView {
     private var pageBeforeToolbarToggle: Page?
     /// 建鍵時的皮膚世代 — 皮膚重載後才需要重建 KeySpec（滑動開關/版面選項）
     private var builtSkinGeneration = -1
+    /// 建鍵時「中文模式大寫字母」偏好值 — 在容器 app 改過後回鍵盤要重建鍵面
+    private var builtUppercaseLetters = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -90,6 +92,7 @@ final class KeyboardView: UIView {
     func syncSessionState(needsSwitchKey: Bool, returnLabel: String) {
         if needsInputModeSwitchKey == needsSwitchKey && returnKeyLabel == returnLabel
             && builtSkinGeneration == SkinSettings.shared.generation
+            && builtUppercaseLetters == OhMyBiasPrefs.uppercaseLettersInChinese
             && currentPage != .phrases {  // 常用語可能在容器 app 被改過 — 回鍵盤時重讀
             return
         }
@@ -120,6 +123,7 @@ final class KeyboardView: UIView {
 
     func reloadKeys() {
         builtSkinGeneration = SkinSettings.shared.generation
+        builtUppercaseLetters = OhMyBiasPrefs.uppercaseLettersInChinese
         rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         keyButtons.removeAll()
         panelView?.removeFromSuperview()
@@ -253,8 +257,10 @@ final class KeyboardView: UIView {
         let r1 = "qwertyuiop".map { String($0) }
         let r2 = "asdfghjkl".map { String($0) }
         let r3 = "zxcvbnm".map { String($0) }
+        // 鍵面大寫：英文模式看 shift；中文模式看偏好（字根表慣用大寫）。action 一律小寫碼
+        let uppercase = isEnglishMode ? isShifted : OhMyBiasPrefs.uppercaseLettersInChinese
         func key(_ s: String) -> KeySpec {
-            KeySpec(label: isEnglishMode && isShifted ? s.uppercased() : s, action: .letter(s),
+            KeySpec(label: uppercase ? s.uppercased() : s, action: .letter(s),
                     swipeUp: swipeEntry(SwipeData.up[s], up: true),
                     swipeDown: swipeEntry(SwipeData.down[s], up: false),
                     longPress: skin.longPressEnabled ? LongPressData.letterMenu(s) : nil)
