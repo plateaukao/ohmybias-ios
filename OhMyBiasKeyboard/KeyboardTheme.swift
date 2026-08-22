@@ -117,10 +117,21 @@ enum KeyboardTheme {
     static var border: UIColor { cached("border") { pal("border", "#000000", "#BBBBBB") } }
     /// 功能鍵邊框（未定義時鏈回皮膚的一般邊框）
     static var systemBorder: UIColor { cached("systemBorder") { pal(["systemBorder", "border"], "#000000", "#333333") } }
+    /// 按下時的邊框色（未定義時鏈回該鍵平時的邊框色 → 舊皮膚外觀不變）
+    static var borderHighlight: UIColor { cached("borderHighlight") { pal(["borderHighlight", "border"], "#000000", "#BBBBBB") } }
+    static var systemBorderHighlight: UIColor {
+        cached("systemBorderHighlight") { pal(["systemBorderHighlight", "systemBorder", "border"], "#000000", "#333333") }
+    }
     /// 邊框寬依皮膚淺/深色調色盤可能不同 — 以呼叫端視圖的 traits 判斷，勿讀全域外觀
     static func borderWidth(for traits: UITraitCollection) -> CGFloat {
         let dark = traits.userInterfaceStyle == .dark
         return CGFloat(SkinSettings.shared.paletteNumber("borderSize", dark: dark) ?? 1)
+    }
+    /// 按下時的邊框寬（未定義時同平時邊框寬）
+    static func borderWidthHighlight(for traits: UITraitCollection) -> CGFloat {
+        let dark = traits.userInterfaceStyle == .dark
+        if let v = SkinSettings.shared.paletteNumber("borderSizeHighlight", dark: dark) { return CGFloat(v) }
+        return borderWidth(for: traits)
     }
     static let cornerRadius: CGFloat = 8
 

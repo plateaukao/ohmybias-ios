@@ -565,13 +565,17 @@ final class KeyButton: UIButton {
     }
 
     private func applyColors() {
-        layer.borderWidth = KeyboardTheme.borderWidth(for: traitCollection)  // 皮膚淺/深邊框寬可能不同
+        // 邊框寬/色都分平時與按下兩套（皮膚未定義按下值時鏈回平時值）— 皮膚淺/深邊框寬可能不同
+        layer.borderWidth = isHighlighted ? KeyboardTheme.borderWidthHighlight(for: traitCollection)
+                                          : KeyboardTheme.borderWidth(for: traitCollection)
         if spec.isSpecial {
             backgroundColor = isHighlighted ? KeyboardTheme.keySystemHighlight : KeyboardTheme.keySystem
-            layer.borderColor = KeyboardTheme.systemBorder.resolvedColor(with: traitCollection).cgColor
+            let bd = isHighlighted ? KeyboardTheme.systemBorderHighlight : KeyboardTheme.systemBorder
+            layer.borderColor = bd.resolvedColor(with: traitCollection).cgColor
         } else {
             backgroundColor = isHighlighted ? KeyboardTheme.keyNormalHighlight : KeyboardTheme.keyNormal
-            layer.borderColor = KeyboardTheme.border.resolvedColor(with: traitCollection).cgColor
+            let bd = isHighlighted ? KeyboardTheme.borderHighlight : KeyboardTheme.border
+            layer.borderColor = bd.resolvedColor(with: traitCollection).cgColor
         }
     }
 
