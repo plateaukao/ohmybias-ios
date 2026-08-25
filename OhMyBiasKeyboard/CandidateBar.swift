@@ -18,6 +18,8 @@ final class CandidateBar: UIView {
     private let dismissButton = UIButton(type: .system)
     private var dismissWidth: NSLayoutConstraint!
     private let scrollView = UIScrollView()
+    /// 右緣溢出指示 › — 候選/聯想超出可視範圍且還能往右捲時顯示，捲到底自動消失
+    private let overflowHint = UILabel()
     private let stack = UIStackView()
     private let toolbarStack = UIStackView()
     private var languageButton: UIButton?
@@ -95,7 +97,18 @@ final class CandidateBar: UIView {
 
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.delegate = self
         addSubview(scrollView)
+
+        overflowHint.text = "\u{203a}"
+        overflowHint.font = .systemFont(ofSize: 22)
+        overflowHint.textColor = KeyboardTheme.textSub
+        overflowHint.textAlignment = .center
+        // 蓋在被截斷的候選字上，要有底色才不會與字重疊難讀（同列底色；玻璃模式維持透明）
+        overflowHint.backgroundColor = KeyboardTheme.glassHost ? .clear : KeyboardTheme.toolbarBackground
+        overflowHint.isHidden = true
+        overflowHint.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(overflowHint)
 
         stack.axis = .horizontal
         stack.spacing = 4
@@ -151,6 +164,10 @@ final class CandidateBar: UIView {
             stack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
             stack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             stack.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor),
+            overflowHint.trailingAnchor.constraint(equalTo: trailingAnchor),
+            overflowHint.topAnchor.constraint(equalTo: topAnchor),
+            overflowHint.bottomAnchor.constraint(equalTo: bottomAnchor),
+            overflowHint.widthAnchor.constraint(equalToConstant: 18),
         ])
         updateToolbarVisibility()
     }
@@ -168,6 +185,18 @@ final class CandidateBar: UIView {
         let idle = (composingLabel.text ?? "").isEmpty && activeButtons == 0
         toolbarStack.isHidden = !idle
         scrollView.isHidden = idle
+        updateOverflowHint()
+    }
+
+    /// › 指示的顯示條件：捲動區可見、內容溢出且還沒捲到底
+    private func updateOverflowHint() {
+        let more = scrollView.contentSize.width - scrollView.contentOffset.x - scrollView.bounds.width > 1
+        overflowHint.isHidden = scrollView.isHidden || !more
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateOverflowHint()  // 轉向/寬度變化後重新判斷
     }
 
     func setComposing(_ text: String) {
@@ -229,6 +258,8 @@ final class CandidateBar: UIView {
             }
             stack.layoutIfNeeded()
         }
+        scrollView.layoutIfNeeded()
+        updateOverflowHint()
     }
 
     @objc private func didTap(_ sender: UIButton) {
@@ -248,5 +279,11 @@ final class CandidateBar: UIView {
             b.layer.borderWidth = KeyboardTheme.borderWidth(for: traitCollection)
             b.layer.borderColor = KeyboardTheme.border.resolvedColor(with: traitCollection).cgColor
         }
+    }
+}
+
+extension CandidateBar: UIScrollViewDelegate {
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        updateOverflowHint()
     }
 }

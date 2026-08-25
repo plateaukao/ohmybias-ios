@@ -60,7 +60,7 @@ final class SuggestionEngine {
         // Single-char fallback — 極簡版由萌典供應（一般語料，需尊重 skipChars）
         if pool3.isEmpty && !isSkipChar && recentCommitted.count >= 1 {
             let p = String(recentCommitted.suffix(1))
-            pool3 = wikiCorpus.suggestDomainTerms(prefix: p, limit: 5)
+            pool3 = wikiCorpus.suggestDomainTerms(prefix: p, limit: 10)
         }
 
         // Jingjing-ti phrase expansion: independent pool, supports single-char prefix
