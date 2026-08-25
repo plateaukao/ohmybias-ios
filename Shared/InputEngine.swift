@@ -815,6 +815,15 @@ final class InputEngine {
         _currentCandidates = ranker.rank(raw: raw, code: code, prev: _lastCommitted,
                                          mode: _inputMode, cinTable: cinTable, freqTracker: freqTracker)
 
+        // 常用語自訂組字碼：排在字表候選之後（撞碼時不擠掉原本的字；獨佔碼時就是唯一候選，
+        // 「唯一候選自動送出」開著會直接上屏）。不經字頻排序 — 位置固定可預期。
+        if !_isWildcard {
+            let shortcuts = cinTable.shortcutLookup(code)
+            if !shortcuts.isEmpty {
+                _currentCandidates += shortcuts.filter { !_currentCandidates.contains($0) }
+            }
+        }
+
         // Fuzzy match: if no candidates, try adjacent-key substitution
         if _currentCandidates.isEmpty && !_isWildcard && code.count >= 2 && prefs.fuzzyMatch {
             _currentCandidates = ranker.fuzzyLookup(code, cinTable: cinTable)

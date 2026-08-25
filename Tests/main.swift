@@ -374,6 +374,78 @@ func testSuggestDisabled() {
     check(mock.suggestions.isEmpty, "no suggestions when disabled")
 }
 
+// === 常用語自訂組字碼 ===
+
+func testUserPhrasesParseSerialize() {
+    let text = "蝦米輸入法\n你好\txm\n  \n單\tq\n壞碼\tA B\n指令\t,,x\n"
+    let entries = UserPhrases.parse(text)
+    checkEqual(entries, [
+        UserPhrases.Entry("蝦米輸入法"),
+        UserPhrases.Entry("你好", "xm"),
+        UserPhrases.Entry("單", "q"),
+        UserPhrases.Entry("壞碼"),      // 不合法的碼丟掉、詞保留
+        UserPhrases.Entry("指令"),      // ,, 前綴不能當碼
+    ], "parse")
+    checkEqual(UserPhrases.serialize(entries), "蝦米輸入法\n你好\txm\n單\tq\n壞碼\n指令\n", "serialize")
+    checkEqual(UserPhrases.parse(UserPhrases.serialize(entries)), entries, "round trip")
+}
+
+func testUserPhrasesCodeValidation() {
+    check(UserPhrases.isValidCode("abc"), "abc valid")
+    check(UserPhrases.isValidCode("a,.'[]"), "punct valid")
+    check(UserPhrases.isValidCode(",a"), ",a valid")
+    check(!UserPhrases.isValidCode(""), "empty invalid")
+    check(!UserPhrases.isValidCode(",,a"), ",, prefix invalid")
+    check(!UserPhrases.isValidCode("Ab"), "uppercase invalid")
+    check(!UserPhrases.isValidCode("a b"), "space invalid")
+    check(!UserPhrases.isValidCode("a1"), "digit invalid")
+}
+
+func testShortcutTableLookup() {
+    let table = makeFixtureTable()
+    table.setShortcuts(["xm": ["蝦米輸入法"], "ab": ["明天見", "再見"], "abcdef": ["長碼"]])
+    checkEqual(table.lookup("ab"), ["明"], "lookup 不含捷徑")
+    checkEqual(table.shortcutLookup("ab"), ["明天見", "再見"], "shortcutLookup")
+    checkEqual(table.shortcutLookup("XM"), ["蝦米輸入法"], "shortcutLookup case-insensitive")
+    check(table.hasPrefix("x"), "捷徑前綴可續打")
+    checkEqual(table.validNextKeys(after: "x"), Set(["m"]), "validNextKeys via shortcut")
+    checkEqual(table.maxCodeLength, 6, "長捷徑拉高 maxCodeLength")
+}
+
+func testShortcutFreeCodeOnlyCandidate() {
+    let (engine, mock) = makeEngine()
+    engine.cinTable.setShortcuts(["xm": ["蝦米輸入法"]])
+    engine.handleLetter("x")
+    checkEqual(mock.candidateUpdates.last ?? ["?"], [], "x 無字表候選、只有捷徑前綴")
+    engine.handleLetter("m")
+    checkEqual(mock.candidateUpdates.last ?? [], ["蝦米輸入法"], "xm 只有捷徑詞")
+    engine.handleSpace()
+    checkEqual(mock.commits, ["蝦米輸入法"], "空白送出捷徑詞")
+}
+
+func testShortcutTakenCodeAfterExisting() {
+    let (engine, mock) = makeEngine()
+    engine.cinTable.setShortcuts(["ab": ["明天見"], "hj": ["再見"]])
+    engine.handleLetter("a"); engine.handleLetter("b")
+    checkEqual(mock.candidateUpdates.last ?? [], ["明", "明天見"], "撞碼排在字表候選後")
+    engine.handleSpace()
+    checkEqual(mock.commits, ["明"], "空白仍送出字表首選")
+    engine.handleLetter("h"); engine.handleLetter("j")
+    let cands = mock.candidateUpdates.last ?? []
+    checkEqual(cands.count, 3, "hj 三個候選")
+    checkEqual(cands.last ?? "", "再見", "捷徑排最後")
+    engine.selectCandidate(at: 2)
+    checkEqual(mock.commits, ["明", "再見"], "選捷徑詞上屏")
+}
+
+func testShortcutAutoCommit() {
+    var prefs = MockPrefs(); prefs.autoCommit = true
+    let (engine, mock) = makeEngine(prefs: prefs)
+    engine.cinTable.setShortcuts(["xm": ["蝦米輸入法"]])
+    engine.handleLetter("x"); engine.handleLetter("m")
+    checkEqual(mock.commits, ["蝦米輸入法"], "唯一候選且無法續打 → 直接上屏")
+}
+
 // === Run ===
 
 testHarness()
@@ -395,7 +467,12 @@ testWikiCorpusPhrases()
 testZhuyinLookupBins()
 testSuggestionEngineBasic()
 testEngineSuggestFlow()
-testSuggestDisabled()
+testUserPhrasesParseSerialize()
+testUserPhrasesCodeValidation()
+testShortcutTableLookup()
+testShortcutFreeCodeOnlyCandidate()
+testShortcutTakenCodeAfterExisting()
+testShortcutAutoCommit()
 
 print("\n\(passed) passed, \(failed) failed")
 exit(failed == 0 ? 0 : 1)

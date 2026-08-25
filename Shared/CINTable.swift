@@ -14,6 +14,10 @@ final class CINTable {
     // MARK: - Text fallback + overlay (extras, emoji — small Dict)
     private var overlay: [String: [String]] = [:]
 
+    /// 常用語自訂組字碼（UserPhrases）— 與字表分開存：查詢時排在既有候選之後，
+    /// 不參與字頻排序，使用者設了跟字表撞碼的捷徑也不會把原本的字擠掉
+    private(set) var shortcuts: [String: [String]] = [:]
+
     // MARK: - Reverse lookup caches (lazy, released on memory pressure)
     private var _reverseTable: [String: [String]]?
     private var reverseTable: [String: [String]] {
@@ -115,6 +119,9 @@ final class CINTable {
             }
         }
         for k in overlay.keys { if k.count > maxCodeLength { maxCodeLength = k.count } }
+        // 常用語捷徑 — singleton 可能是舊行程讀的，先比對檔案時間
+        UserPhrases.shared.reloadIfChanged()
+        applyShortcuts(UserPhrases.shared.shortcuts)
     }
 
     /// Load from a .cin text file (compiles to temp .bin first). For tests and on-the-fly use.
@@ -139,6 +146,9 @@ final class CINTable {
             }
         }
         for k in overlay.keys { if k.count > maxCodeLength { maxCodeLength = k.count } }
+        // 常用語捷徑 — singleton 可能是舊行程讀的，先比對檔案時間
+        UserPhrases.shared.reloadIfChanged()
+        applyShortcuts(UserPhrases.shared.shortcuts)
     }
 
     /// Load from a .cin text file directly (macOS legacy path, also used by reload fallback).
@@ -165,7 +175,30 @@ final class CINTable {
             }
         }
         for k in overlay.keys { if k.count > maxCodeLength { maxCodeLength = k.count } }
+        // 常用語捷徑 — singleton 可能是舊行程讀的，先比對檔案時間
+        UserPhrases.shared.reloadIfChanged()
+        applyShortcuts(UserPhrases.shared.shortcuts)
     }
+
+    // MARK: - 常用語捷徑
+
+    /// 套用捷徑表並把碼長算進 maxCodeLength（捷徑可比字表最長碼長，否則打不出來）
+    private func applyShortcuts(_ sc: [String: [String]]) {
+        shortcuts = sc
+        for k in sc.keys { if k.count > maxCodeLength { maxCodeLength = k.count } }
+    }
+
+    /// 設定頁改過常用語時重套捷徑（不重 mmap 字表）。鍵盤 extension 每次出現時呼叫 —
+    /// UserPhrases 比對檔案修改時間，沒變就什麼都不做。
+    @discardableResult
+    func reloadShortcutsIfNeeded() -> Bool {
+        guard UserPhrases.shared.reloadIfChanged() else { return false }
+        applyShortcuts(UserPhrases.shared.shortcuts)
+        return true
+    }
+
+    /// 測試／外部注入用：直接設捷徑表
+    func setShortcuts(_ sc: [String: [String]]) { applyShortcuts(sc) }
 
     // MARK: - Binary loading
 
@@ -396,6 +429,9 @@ final class CINTable {
         return result
     }
 
+    /// 常用語捷徑 — 不含字表本身的候選（見 `shortcuts`）。撞碼時引擎把這些排在字表候選之後。
+    func shortcutLookup(_ code: String) -> [String] { shortcuts[code.lowercased()] ?? [] }
+
     func hasPrefix(_ prefix: String) -> Bool {
         let p = prefix.lowercased()
         // Binary: check via binary search
@@ -403,8 +439,8 @@ final class CINTable {
             let i = lowerBound(p)
             if i < entryCount && codeHasPrefix(d, at: i, p.utf8) { return true }
         }
-        // Overlay: scan keys
-        return overlay.keys.contains { $0.hasPrefix(p) }
+        // Overlay / 捷徑: scan keys
+        return overlay.keys.contains { $0.hasPrefix(p) } || shortcuts.keys.contains { $0.hasPrefix(p) }
     }
 
     func validNextKeys(after prefix: String) -> Set<Character> {
@@ -424,8 +460,11 @@ final class CINTable {
                 }
             }
         }
-        // Overlay
+        // Overlay / 捷徑
         for key in overlay.keys where key.hasPrefix(p) && key.count > p.count {
+            result.insert(key[key.index(key.startIndex, offsetBy: p.count)])
+        }
+        for key in shortcuts.keys where key.hasPrefix(p) && key.count > p.count {
             result.insert(key[key.index(key.startIndex, offsetBy: p.count)])
         }
         return result

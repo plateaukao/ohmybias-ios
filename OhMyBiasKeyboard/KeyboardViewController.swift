@@ -14,6 +14,10 @@ final class KeyboardViewController: UIInputViewController {
 
     /// 候選列目前顯示的是聯想詞（composing 為空時點選直接送出）
     private var showingSuggestions = false
+    /// 目前欄位是密碼／純 ASCII 類 — 暫時切英文直通、換欄位還原使用者的中英狀態。
+    /// 密碼不該經過組字；容器 app 常用語設定的「組字碼」欄（asciiCapable）也靠這個讓使用者
+    /// 直接打碼不被組成中文。
+    private var forcedEnglishForField = false
 
     // MARK: - Lifecycle
 
@@ -34,11 +38,31 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         applyToolbarBackground()
+        // 容器 app 改過常用語（含組字碼）— extension 行程可能還活著，比對檔案時間重套捷徑
+        engine.cinTable.reloadShortcutsIfNeeded()
+        syncFieldEnglishMode()
         // 只有鍵面實際會變才重建按鍵（syncSessionState 內比對短路）
         keyboardView.syncSessionState(
             needsSwitchKey: needsInputModeSwitchKey,
             returnLabel: Self.returnLabel(for: textDocumentProxy.returnKeyType)
         )
+    }
+
+    /// 換輸入欄位（同一 host app 內焦點移動不會重跑 viewWillAppear）
+    override func textDidChange(_ textInput: UITextInput?) {
+        super.textDidChange(textInput)
+        syncFieldEnglishMode()
+    }
+
+    /// 密碼類（secure）與 asciiCapable 欄位暫時英文直通（不寫 lastEnglishMode — 離開欄位就還原）
+    private func syncFieldEnglishMode() {
+        let proxy = textDocumentProxy
+        let forced = (proxy.isSecureTextEntry ?? false) || proxy.keyboardType == .asciiCapable
+        guard forced != forcedEnglishForField else { return }
+        forcedEnglishForField = forced
+        engine.setEnglishMode(forced ? true : OhMyBiasPrefs.lastEnglishMode)
+        keyboardView.isEnglishMode = engine.isEnglishMode
+        refreshIdleBar()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -212,7 +236,8 @@ final class KeyboardViewController: UIInputViewController {
             engine.toggleEnglishMode()
             keyboardView.isEnglishMode = engine.isEnglishMode
             keyboardView.showPage(.letters)  // 從工具列切換時回到字母頁
-            OhMyBiasPrefs.lastEnglishMode = engine.isEnglishMode
+            // 密碼／ASCII 欄位的暫時英文是欄位性質，不是使用者偏好 — 不記
+            if !forcedEnglishForField { OhMyBiasPrefs.lastEnglishMode = engine.isEnglishMode }
             refreshIdleBar()
         case .page(let page):
             keyboardView.showPage(page)
