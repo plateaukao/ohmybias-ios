@@ -146,6 +146,7 @@ final class KeyboardViewController: UIInputViewController {
             keyboardView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
+        keyboardView.yieldTopMargin = { [weak self] in self?.candidateBar.hasScrollableCandidates ?? false }
         candidateBar.onSelect = { [weak self] idx in self?.didSelectCandidate(at: idx) }
         candidateBar.onToolbarKey = { [weak self] action in self?.handleKey(action) }
         candidateBar.onDismissSuggestions = { [weak self] in self?.clearSuggestions() }

@@ -204,8 +204,25 @@ final class CandidateBar: UIView {
     /// 候選字之間的 4pt 間距同理。只在間距範圍內轉發（gapSlop），佔位空格中央仍留白。
     private static let gapSlop: CGFloat = 12
 
+    /// 候選列與鍵面之間的縫（鍵面頂端 6pt 留白）在有候選時也算候選捲動區：
+    /// 從縫裡起手橫滑要能捲候選，而不是打到第一排鍵。KeyboardView.hitTest 對
+    /// 這條帶子讓路（yieldTopMargin），這裡把命中範圍往下延伸接手。
+    static let bottomSlop: CGFloat = 6
+    /// 候選捲動區目前可見（有候選或聯想）— KeyboardView 據此決定頂端留白是否讓路
+    var hasScrollableCandidates: Bool { !scrollView.isHidden }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        if super.point(inside: point, with: event) { return true }
+        guard hasScrollableCandidates else { return false }
+        return point.x >= 0 && point.x < bounds.width
+            && point.y >= bounds.height && point.y < bounds.height + Self.bottomSlop
+    }
+
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        let hitView = super.hitTest(point, with: event)
+        // 下方延伸帶：當成貼在捲動區底緣的點處理（捲動與點選都交給捲動區內容）
+        let inBottomSlop = point.y >= bounds.height && hasScrollableCandidates
+        let point = inBottomSlop ? CGPoint(x: point.x, y: bounds.height - 0.5) : point
+        let hitView = super.hitTest(point, with: event) ?? (inBottomSlop ? scrollView : nil)
         guard let hitView, !(hitView is UIControl) else { return hitView }
         let host: UIStackView
         if !toolbarStack.isHidden {
@@ -220,7 +237,7 @@ final class CandidateBar: UIView {
         guard let nearest = buttons.min(by: {
             Self.squaredDistance(from: p, to: $0.frame) < Self.squaredDistance(from: p, to: $1.frame)
         }), Self.squaredDistance(from: p, to: nearest.frame) <= Self.gapSlop * Self.gapSlop
-        else { return hitView }
+        else { return host === stack ? scrollView : hitView }  // 候選尾端空白：仍可拖動捲動
         return nearest
     }
 

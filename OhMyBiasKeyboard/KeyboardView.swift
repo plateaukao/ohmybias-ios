@@ -52,6 +52,8 @@ final class KeyboardView: UIView {
     var returnKeyLabel = "⏎"
 
     private let rowsStack = UIStackView()
+    /// 鍵面頂端留白（候選列與第一排鍵之間的縫）
+    static let topMargin: CGFloat = 6
     private var keyButtons: [KeyButton] = []
     private var pageBeforeToolbarToggle: Page?
     /// 建鍵時的皮膚世代 — 皮膚重載後才需要重建 KeySpec（滑動開關/版面選項）
@@ -68,7 +70,7 @@ final class KeyboardView: UIView {
         rowsStack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(rowsStack)
         NSLayoutConstraint.activate([
-            rowsStack.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            rowsStack.topAnchor.constraint(equalTo: topAnchor, constant: Self.topMargin),
             rowsStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
             rowsStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
             rowsStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
@@ -212,10 +214,16 @@ final class KeyboardView: UIView {
         }
     }
 
+    /// 頂端 6pt 留白是否讓給上方的候選列（有候選時，縫裡起手要能捲候選）
+    var yieldTopMargin: (() -> Bool)?
+
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hitView = super.hitTest(point, with: event)
         if hitView is KeyButton || panelView != nil {
             return hitView
+        }
+        if point.y < Self.topMargin, hitView != nil, yieldTopMargin?() == true {
+            return nil  // 讓父視圖繼續測到 CandidateBar（其 point(inside:) 向下延伸接手）
         }
 
         // 按鍵間距與鍵盤外緣（左右 3pt、上下 6pt）也屬於最近按鍵的可點區域；
