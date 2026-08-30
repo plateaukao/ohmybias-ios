@@ -199,6 +199,37 @@ final class CandidateBar: UIView {
         updateOverflowHint()  // 轉向/寬度變化後重新判斷
     }
 
+    /// 按鈕之間的間距與外緣也算最近那顆的可點區。工具列圖示每顆只有約 34pt 寬
+    /// （10 顆平分螢幕寬），嚴格以框線判定時指尖稍偏就落在 stack 空隙上而沒反應；
+    /// 候選字之間的 4pt 間距同理。只在間距範圍內轉發（gapSlop），佔位空格中央仍留白。
+    private static let gapSlop: CGFloat = 12
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hitView = super.hitTest(point, with: event)
+        guard let hitView, !(hitView is UIControl) else { return hitView }
+        let host: UIStackView
+        if !toolbarStack.isHidden {
+            host = toolbarStack
+        } else if !scrollView.isHidden, scrollView.frame.contains(point) {
+            host = stack  // 捲動區內：convert 會把 contentOffset 算進去
+        } else {
+            return hitView  // composing 標籤等非按鈕區域維持原樣
+        }
+        let p = convert(point, to: host)
+        let buttons = host.arrangedSubviews.compactMap { $0 as? UIButton }.filter { !$0.isHidden }
+        guard let nearest = buttons.min(by: {
+            Self.squaredDistance(from: p, to: $0.frame) < Self.squaredDistance(from: p, to: $1.frame)
+        }), Self.squaredDistance(from: p, to: nearest.frame) <= Self.gapSlop * Self.gapSlop
+        else { return hitView }
+        return nearest
+    }
+
+    private static func squaredDistance(from point: CGPoint, to frame: CGRect) -> CGFloat {
+        let dx = max(frame.minX - point.x, 0, point.x - frame.maxX)
+        let dy = max(frame.minY - point.y, 0, point.y - frame.maxY)
+        return dx * dx + dy * dy
+    }
+
     func setComposing(_ text: String) {
         if (composingLabel.text ?? "") == text { return }  // 未變就不重排
         composingLabel.text = text

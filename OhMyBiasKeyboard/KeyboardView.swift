@@ -218,16 +218,12 @@ final class KeyboardView: UIView {
             return hitView
         }
 
-        // 按鍵間距也屬於相鄰按鍵的可點區域；以距離中點平均劃分。
+        // 按鍵間距與鍵盤外緣（左右 3pt、上下 6pt）也屬於最近按鍵的可點區域；
+        // hitView 非 nil 即點在本視圖內，整面都轉給最近的鍵，不留死角。
+        guard hitView != nil else { return nil }
         let frames = keyButtons.map { ($0, $0.convert($0.bounds, to: self)) }
-        guard let minX = frames.map({ $0.1.minX }).min(),
-              let maxX = frames.map({ $0.1.maxX }).max(),
-              let minY = frames.map({ $0.1.minY }).min(),
-              let maxY = frames.map({ $0.1.maxY }).max(),
-              point.x >= minX, point.x <= maxX, point.y >= minY, point.y <= maxY else {
-            return hitView
-        }
         return frames.min(by: { squaredDistance(from: point, to: $0.1) < squaredDistance(from: point, to: $1.1) })?.0
+            ?? hitView
     }
 
     private func squaredDistance(from point: CGPoint, to frame: CGRect) -> CGFloat {
