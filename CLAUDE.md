@@ -44,3 +44,4 @@ Shared 引擎平台無關，測試在 **macOS host** 上以 swiftc 編譯執行�
 - `phrases.bin` 的 key 是詞首單字；萌典用「臺」不用「台」（打「台」不會出聯想，打「臺」才會）。
 - 鍵盤 extension 記憶體上限約 60MB — `MemoryBudget` 管控 lazy 載入，新增資料結構要掛預算。
 - `,,V` 剪貼簿指令需要使用者在 iOS 鍵盤設定啟用「完整取用權限」（`RequestsOpenAccess` 已請求此權限）。
+- **emoji 面板的記憶體大戶不是我們的 view，是 CoreText 的字形快取**：畫過的 emoji 以 CGImage 存在 CoreText 自己的 NSCache（每顆約 36–65KB、行程全域、只在記憶體警告時才清）。`CoreTextGlyphCache` swizzle NSCache 抓到那些 cache，面板關閉／切分類／逛到 `MemoryBudget.glyphCacheDrainMB` 時主動清空。新增會大量畫 emoji 的 UI 記得掛同一套 drain。

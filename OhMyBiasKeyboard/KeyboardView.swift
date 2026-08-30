@@ -126,8 +126,12 @@ final class KeyboardView: UIView {
         builtUppercaseLetters = OhMyBiasPrefs.uppercaseLettersInChinese
         rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         keyButtons.removeAll()
-        panelView?.removeFromSuperview()
-        panelView = nil
+        if panelView != nil {
+            panelView?.removeFromSuperview()
+            panelView = nil
+            // 面板拆掉後 CoreText 快取裡的 emoji 字形已沒人用 — 現在清才會真的退記憶體
+            CoreTextGlyphCache.drain()
+        }
         rowsStack.isHidden = false
         let rows: [[KeySpec]]
         switch currentPage {

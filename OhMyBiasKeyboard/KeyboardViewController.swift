@@ -24,6 +24,7 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         SkinSettings.shared.reload()  // 讀取匯入的 cskin 設定（工具列/配色/字級/版面）
+        CoreTextGlyphCache.install()  // 攔截 CoreText 的 emoji 字形快取，面板收掉時才能真的把記憶體要回來
         engine = InputEngine()
         engine.delegate = self
         engine.loadTable()
@@ -82,6 +83,7 @@ final class KeyboardViewController: UIInputViewController {
         super.didReceiveMemoryWarning()
         if let host = settingsPanelHost { dismissSettingsPanel(host) }
         keyboardView.releasePanels()
+        CoreTextGlyphCache.drain()
         MemoryBudget.releaseAll(cinTable: engine.cinTable)
     }
 

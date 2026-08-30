@@ -13,6 +13,7 @@ enum MemoryBudget {
     static let uiOverhead: Int = 3      // CandidateBar, KeyboardView, haptics
     static let collectionPanel: Int = 1 // 符號/emoji/顏文字面板（CollectionData 靜態表＋UICollectionView）
     static let settingsPanel: Int = 10  // ⚙ 設定面板 — 首次載入 SwiftUI runtime（實測約 10MB）
+    static let glyphCacheDrainMB: Int = 45  // 逛 emoji 面板時 footprint 到此即清 CoreText 字形快取（警告約 55MB、jetsam 約 77MB）
 
     // MARK: - Runtime check
 

@@ -15,6 +15,7 @@ final class CollectionPanelView: UIView {
     private var currentSection = 0
     private var currentItems: [String] = []
     private var firstSectionCache: [String]?
+    private var displayedSinceCheck = 0
     private var categoryButtons: [UIButton] = []
     private var bottomButtons: [UIButton] = []
     private let categoryScroll = UIScrollView()
@@ -133,6 +134,8 @@ final class CollectionPanelView: UIView {
 
     @objc private func didTapCategory(_ sender: UIButton) {
         currentSection = sender.tag
+        // 切分類：上一個分類的字形快取整批作廢（新分類的 cell 稍後才畫，不受影響）
+        CoreTextGlyphCache.drain()
         loadCurrentSection()
         highlightCategory()
         collectionView.reloadData()
@@ -161,6 +164,14 @@ extension CollectionPanelView: UICollectionViewDataSource, UICollectionViewDeleg
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cell", for: indexPath) as! PanelCell
         cell.configure(currentItems[indexPath.item], fontSize: itemFontSize)
         return cell
+    }
+
+    /// 大分類連續捲動時，字形快取在同一個面板 session 內也可能堆到上限 — 每 24 格檢查一次
+    func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        displayedSinceCheck += 1
+        guard displayedSinceCheck >= 24 else { return }
+        displayedSinceCheck = 0
+        CoreTextGlyphCache.drainIfNeeded(aboveMB: MemoryBudget.glyphCacheDrainMB)
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
