@@ -362,9 +362,11 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func handleSpaceKey() {
-        if engine.isEnglishMode { textDocumentProxy.insertText(" "); return }
+        // 查碼模式優先於英文模式 — 英打切到注音/拼音查碼時，空白是一聲/查碼，
+        // 不是直通空格（android issue #6 同款）
         if engine.isPinyinMode { engine.handlePinyinSpace(); return }
         if engine.isZhuyinMode { engine.handleZhuyinSpace(); return }
+        if engine.isEnglishMode { textDocumentProxy.insertText(" "); return }
         if engine.composing.isEmpty && !showingSuggestions {
             textDocumentProxy.insertText(" ")
             return
@@ -379,8 +381,10 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func handleBackspaceKey() {
-        if engine.isEnglishMode { textDocumentProxy.deleteBackward(); return }
+        // 同 handleSpaceKey：查碼模式優先於英文模式（退格要清注音槽，不是刪編輯框）
         if engine.isPinyinMode { engine.handlePinyinBackspace(); return }
+        if engine.isZhuyinMode { engine.handleBackspace(); return }
+        if engine.isEnglishMode { textDocumentProxy.deleteBackward(); return }
         if showingSuggestions { clearSuggestions() }
         engine.handleBackspace()
     }
