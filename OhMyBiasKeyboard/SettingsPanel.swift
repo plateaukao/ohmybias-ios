@@ -8,6 +8,10 @@ struct SettingsPanelView: View {
     /// 執行 ,, 指令（傳不含 ,, 前綴的指令名）
     var onCommand: (String) -> Void
     var onDismiss: () -> Void
+    /// 「開啟設定」— Link 的系統路徑之外，再交給 controller 多試幾條路（見 openContainerApp）
+    var onOpenSettings: (URL) -> Void
+
+    static let settingsURL = URL(string: "ohmybias://settings")!
 
     /// 一顆動作鈕：顯示名稱＋對應指令（指令當副標，順便記住鍵盤打法）
     private struct Command: Identifiable {
@@ -80,7 +84,7 @@ struct SettingsPanelView: View {
                         .cornerRadius(KeyboardTheme.cornerRadius)
                 }
                 Spacer()
-                Link(destination: URL(string: "ohmybias://settings")!) {
+                Link(destination: Self.settingsURL) {
                     HStack(spacing: 6) {
                         Image(systemName: "gearshape")
                         Text("開啟設定")
@@ -92,6 +96,12 @@ struct SettingsPanelView: View {
                     .foregroundColor(Color(KeyboardTheme.textSystem))
                     .cornerRadius(KeyboardTheme.cornerRadius)
                 }
+                // 保留 Link 原本的系統路徑（.systemAction，iOS 18–26 實測可用），
+                // 同時讓 controller 走 extensionContext.open 等其他路 — iOS 27 起系統路徑不通
+                .environment(\.openURL, OpenURLAction { url in
+                    onOpenSettings(url)
+                    return .systemAction
+                })
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 6)

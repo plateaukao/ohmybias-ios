@@ -91,6 +91,40 @@ func testCINCompileRoundtrip() {
     check(table.reverseLookup("明").contains("ab"), "reverse lookup")
 }
 
+/// 匯入來源五花八門：Big5 的舊版 liu.cin、記事本另存的 UTF-8 BOM／UTF-16、CRLF、tab 分隔的指令列
+func testCINCompileEncodings() {
+    let cin = "%cname\t編碼表\r\n%selkey 1234567890\r\n%chardef  begin\r\na\t日\r\nab 明\r\n%chardef end\r\n"
+    let big5 = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(
+        CFStringEncoding(CFStringEncodings.big5.rawValue)))
+    var utf8bom = Data([0xEF, 0xBB, 0xBF]); utf8bom.append(cin.data(using: .utf8)!)
+    let variants: [(String, Data)] = [
+        ("utf8+bom+crlf", utf8bom),
+        ("utf16+bom", cin.data(using: .utf16)!),
+        ("big5", cin.data(using: big5)!),
+    ]
+    for (label, data) in variants {
+        checkEqual(CINCompiler.decode(data), cin, "\(label): decode round-trips")
+        let src = NSTemporaryDirectory() + "ohmybias_enc_\(UUID().uuidString).cin"
+        let dst = src + ".bin"
+        defer { try? FileManager.default.removeItem(atPath: src); try? FileManager.default.removeItem(atPath: dst) }
+        try! data.write(to: URL(fileURLWithPath: src))
+        checkEqual(CINCompiler.compile(src: src, dst: dst), 2, "\(label): 2 codes compiled")
+        let table = CINTable(); table.load(path: src)
+        checkEqual(table.cinName, "編碼表", "\(label): cname via tab-separated directive")
+        checkEqual(table.lookup("ab"), ["明"], "\(label): lookup")
+    }
+    // 沒有 %chardef 區段 → 具體錯誤而不是靜默 0
+    let empty = NSTemporaryDirectory() + "ohmybias_enc_\(UUID().uuidString).cin"
+    defer { try? FileManager.default.removeItem(atPath: empty) }
+    try! "%cname x\n".write(toFile: empty, atomically: true, encoding: .utf8)
+    do { _ = try CINCompiler.compileDetailed(src: empty, dst: empty + ".bin"); check(false, "noChardef should throw") }
+    catch CINCompiler.CompileError.noChardef { check(true, "noChardef thrown") }
+    catch { check(false, "unexpected error \(error)") }
+    do { _ = try CINCompiler.compileDetailed(src: empty + ".missing", dst: empty + ".bin"); check(false, "unreadable should throw") }
+    catch CINCompiler.CompileError.unreadable { check(true, "unreadable thrown") }
+    catch { check(false, "unexpected error \(error)") }
+}
+
 func testEngineComposeAndCommit() {
     let (engine, mock) = makeEngine()
     engine.handleLetter("a")
@@ -450,6 +484,7 @@ func testShortcutAutoCommit() {
 
 testHarness()
 testCINCompileRoundtrip()
+testCINCompileEncodings()
 testEngineComposeAndCommit()
 testEngineCommitComposingRaw()
 testEngineEnglishPassthrough()

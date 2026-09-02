@@ -349,7 +349,7 @@ final class CINTable {
             return
         }
         guard let data = FileManager.default.contents(atPath: path),
-              let content = String(data: data, encoding: .utf8) else { return }
+              let content = CINCompiler.decode(data) else { return }
         var inChardef = false
         var lineCount = 0
         let maxLines = 500_000

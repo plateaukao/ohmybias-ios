@@ -8,11 +8,40 @@ import Foundation
 ///    NEVER pre-compile or bundle .bin files — they are derived from copyrighted material.
 enum CINCompiler {
 
+    enum CompileError: Error {
+        case unreadable    // 讀不到來源檔
+        case undecodable   // 不是 UTF-8／UTF-16／Big5
+        case noChardef     // 沒有 %chardef 區段，或區段內沒有任何字碼
+        case writeFailed   // 寫不出 .bin
+    }
+
+    /// 解碼 .cin 文字：UTF-8（含 BOM）→ 帶 BOM 的 UTF-16 → Big5。
+    /// 網路上流傳的 liu.cin 不少是早年 Windows 版嘸蝦米流出的 Big5 檔，Windows 記事本另存
+    /// 又常帶 BOM 或存成 UTF-16 — 只認 UTF-8 會把這些全判成「無效的 .cin」。
+    static func decode(_ data: Data) -> String? {
+        if let s = String(data: data, encoding: .utf8) {
+            return s.hasPrefix("\u{FEFF}") ? String(s.dropFirst()) : s
+        }
+        if data.count >= 2,
+           (data[0] == 0xFF && data[1] == 0xFE) || (data[0] == 0xFE && data[1] == 0xFF),
+           let s = String(data: data, encoding: .utf16) {
+            return s
+        }
+        let big5 = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(
+            CFStringEncoding(CFStringEncodings.big5.rawValue)))
+        return String(data: data, encoding: big5)
+    }
+
     /// Compile cin at `srcPath` → write bin to `dstPath`. Returns entry count or 0 on failure.
     @discardableResult
     static func compile(src srcPath: String, dst dstPath: String) -> Int {
-        guard let data = FileManager.default.contents(atPath: srcPath),
-              let content = String(data: data, encoding: .utf8) else { return 0 }
+        (try? compileDetailed(src: srcPath, dst: dstPath)) ?? 0
+    }
+
+    /// 同 compile，但失敗時丟出原因 — 匯入畫面據此給使用者具體的提示
+    static func compileDetailed(src srcPath: String, dst dstPath: String) throws -> Int {
+        guard let data = FileManager.default.contents(atPath: srcPath) else { throw CompileError.unreadable }
+        guard let content = decode(data) else { throw CompileError.undecodable }
 
         var entries: [(code: String, chars: [String])] = []
         var codeMap: [String: Int] = [:]  // code → index in entries
@@ -22,14 +51,18 @@ enum CINCompiler {
 
         content.enumerateLines { line, _ in
             let t = line.trimmingCharacters(in: .whitespaces)
-            if t.hasPrefix("%selkey ") {
-                selkeys = String(t.dropFirst(8)).trimmingCharacters(in: .whitespaces); return
+            // 指令列以任意空白（空格／tab、可多個）分隔 — 舊版只認單一空格，
+            // 「%chardef<tab>begin」會整份讀不到字碼
+            if t.hasPrefix("%") {
+                let words = t.split(whereSeparator: { $0 == " " || $0 == "\t" })
+                switch words.first {
+                case "%selkey": if words.count >= 2 { selkeys = String(words[1]) }
+                case "%cname": if words.count >= 2 { cname = words.dropFirst().joined(separator: " ") }
+                case "%chardef": if words.count >= 2 { inChardef = (words[1] == "begin") }
+                default: break
+                }
+                return
             }
-            if t.hasPrefix("%cname ") {
-                cname = String(t.dropFirst(7)).trimmingCharacters(in: .whitespaces); return
-            }
-            if t == "%chardef begin" { inChardef = true; return }
-            if t == "%chardef end" { inChardef = false; return }
             guard inChardef else { return }
             let parts: [String]
             if t.contains("\t") { parts = t.split(separator: "\t", maxSplits: 1).map(String.init) }
@@ -47,7 +80,7 @@ enum CINCompiler {
 
         // Sort by code (ASCII order)
         entries.sort { $0.code < $1.code }
-        guard !entries.isEmpty else { return 0 }
+        guard !entries.isEmpty else { throw CompileError.noChardef }
 
         // Build strings section
         var stringsBuf = Data()
@@ -128,7 +161,7 @@ enum CINCompiler {
             try buf.write(to: URL(fileURLWithPath: dstPath))
             return entries.count
         } catch {
-            return 0
+            throw CompileError.writeFailed
         }
     }
 }

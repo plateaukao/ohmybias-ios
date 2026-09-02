@@ -5,10 +5,15 @@ import UniformTypeIdentifiers
 private let skinDesignerURL = URL(string: "https://plateaukao.github.io/ohmybias-skin/")!
 
 struct ContentView: View {
+    /// 兩種匯入共用同一個 .fileImporter — 同一個 view 掛兩個 .fileImporter 時只有最後一個
+    /// 會彈出（Apple DTS 承認的 SwiftUI 限制）。舊版 liu.cin 的 importer 排在皮膚的前面，
+    /// 「匯入 liu.cin」點了就是沒反應。
+    private enum ImportKind { case cin, skin }
     @State private var showImporter = false
+    @State private var pendingImport: ImportKind = .cin
+    @State private var importing = false
     @State private var tableStatus = ""
     @State private var importMessage: String?
-    @State private var showSkinImporter = false
     @State private var skinStatus = ""
     @State private var skinMessage: String?
     @State private var pendingSkinJSON: Data?
@@ -47,7 +52,8 @@ struct ContentView: View {
                     } else {
                         Text(tableStatus).font(.footnote)
                     }
-                    Button("匯入 liu.cin") { showImporter = true }
+                    Button("匯入 liu.cin") { pendingImport = .cin; showImporter = true }
+                        .disabled(importing)
                     if let msg = importMessage {
                         Text(msg).font(.footnote).foregroundStyle(.secondary)
                     }
@@ -56,7 +62,7 @@ struct ContentView: View {
                 Section("皮膚") {
                     Text(skinStatus).font(.footnote)
                     Link("鍵盤外觀編輯器（網頁）", destination: skinDesignerURL)
-                    Button("匯入皮膚（.cskin）") { showSkinImporter = true }
+                    Button("匯入皮膚（.cskin）") { pendingImport = .skin; showImporter = true }
                     if SkinSettings.shared.isImported {
                         Button("還原內建皮膚", role: .destructive) { resetSkin() }
                     }
@@ -115,14 +121,12 @@ struct ContentView: View {
             .navigationTitle("OhMyBias 米")
         }
         .fileImporter(isPresented: $showImporter,
-                      allowedContentTypes: [.plainText, .data],
+                      allowedContentTypes: pendingImport == .skin ? Self.skinTypes : Self.cinTypes,
                       allowsMultipleSelection: false) { result in
-            handleImport(result)
-        }
-        .fileImporter(isPresented: $showSkinImporter,
-                      allowedContentTypes: [UTType(filenameExtension: "cskin") ?? .zip, .zip, .data],
-                      allowsMultipleSelection: false) { result in
-            handleSkinImport(result)
+            switch pendingImport {
+            case .cin: handleImport(result)
+            case .skin: handleSkinImport(result)
+            }
         }
         .onAppear {
             refreshTableStatus()
@@ -142,13 +146,29 @@ struct ContentView: View {
         }
     }
 
+    private static let cinTypes: [UTType] = [.plainText, .data]
+    private static let skinTypes: [UTType] = [UTType(filenameExtension: "cskin") ?? .zip, .zip, .data]
+
+    /// 讀取選檔器交回的檔案 — 走 NSFileCoordinator。iCloud Drive 尚未下載到本機的檔案、
+    /// 第三方檔案 provider（Google Drive、Dropbox…）的檔案，直接 copyItem／Data(contentsOf:)
+    /// 會拿到「檔案不存在」或「沒有權限」；協調讀取才會觸發下載／實體化。
+    private static func readCoordinated(_ url: URL) throws -> Data {
+        let secured = url.startAccessingSecurityScopedResource()
+        defer { if secured { url.stopAccessingSecurityScopedResource() } }
+        var coordError: NSError?
+        var result: Result<Data, Error> = .failure(CocoaError(.fileReadUnknown))
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordError) { readURL in
+            result = Result { try Data(contentsOf: readURL) }
+        }
+        if let e = coordError { throw e }
+        return try result.get()
+    }
+
     // MARK: - 皮膚匯入（.cskin = zip，取其中 jsonnet/settings.json 的配置層）
 
     /// 讀出 .cskin（zip）內的 settings.json；非 zip 或缺檔回 nil
     private func readSkinSettingsJSON(_ url: URL) -> Data? {
-        let secured = url.startAccessingSecurityScopedResource()
-        defer { if secured { url.stopAccessingSecurityScopedResource() } }
-        guard let zipData = try? Data(contentsOf: url) else { return nil }
+        guard let zipData = try? Self.readCoordinated(url) else { return nil }
         return ZipReader.extractFirst(named: "jsonnet/settings.json", from: zipData)
             ?? ZipReader.extractFirst(named: "settings.json", from: zipData)
     }
@@ -200,22 +220,64 @@ struct ContentView: View {
         skinStatus = "目前皮膚：\(SkinSettings.shared.skinName)"
     }
 
+    /// liu.cin 動輒數 MB、來源又可能是雲端硬碟（下載時間不定）— 讀取＋編譯放背景執行緒
     private func handleImport(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result, let url = urls.first else { return }
-        let secured = url.startAccessingSecurityScopedResource()
-        defer { if secured { url.stopAccessingSecurityScopedResource() } }
+        switch result {
+        case .failure(let error):
+            importMessage = "選檔失敗：\(error.localizedDescription)"
+            return
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            importing = true
+            importMessage = "匯入中…"
+            DispatchQueue.global(qos: .userInitiated).async {
+                let message = Self.importCin(from: url)
+                DispatchQueue.main.async {
+                    importing = false
+                    importMessage = message
+                    refreshTableStatus()
+                }
+            }
+        }
+    }
 
-        let dst = AppConstants.cinPath
-        let binDst = AppConstants.sharedDir + "/liu.bin"
+    /// 讀取＋編譯都到暫存檔，兩者成功才換掉現用的 liu.cin／liu.bin —
+    /// 中途失敗（讀到一半斷線、不是有效 .cin）不動現有字表。回傳給使用者看的結果訊息。
+    private static func importCin(from url: URL) -> String {
+        let fm = FileManager.default
+        let dir = AppConstants.sharedDir
+        let tmpCin = dir + "/liu.cin.importing"
+        let tmpBin = dir + "/liu.bin.importing"
+        defer {
+            try? fm.removeItem(atPath: tmpCin)
+            try? fm.removeItem(atPath: tmpBin)
+        }
+        let data: Data
+        do { data = try readCoordinated(url) }
+        catch { return "無法讀取檔案：\(error.localizedDescription)\n（iCloud 雲端檔案請先在「檔案」app 裡點一下下載到本機）" }
+        guard !data.isEmpty else { return "檔案是空的" }
+        do { try data.write(to: URL(fileURLWithPath: tmpCin)) }
+        catch { return "無法寫入暫存檔：\(error.localizedDescription)" }
+        let count: Int
+        do { count = try CINCompiler.compileDetailed(src: tmpCin, dst: tmpBin) }
+        catch CINCompiler.CompileError.undecodable { return "無法辨識檔案編碼 — 支援 UTF-8、UTF-16、Big5" }
+        catch CINCompiler.CompileError.noChardef { return "找不到 %chardef 字碼區段 — 請確認是有效的 .cin 檔" }
+        catch { return "編譯失敗：\(error.localizedDescription)" }
         do {
-            let fm = FileManager.default
-            if fm.fileExists(atPath: dst) { try fm.removeItem(atPath: dst) }
-            try fm.copyItem(at: url, to: URL(fileURLWithPath: dst))
-            let count = CINCompiler.compile(src: dst, dst: binDst)
-            importMessage = count > 0 ? "已編譯 \(count) 個字碼" : "編譯失敗 — 請確認是有效的 .cin 檔"
-            refreshTableStatus()
-        } catch {
-            importMessage = "匯入失敗：\(error.localizedDescription)"
+            try replace(AppConstants.cinPath, with: tmpCin)
+            try replace(dir + "/liu.bin", with: tmpBin)
+        } catch { return "無法寫入字表：\(error.localizedDescription)" }
+        return "已編譯 \(count) 個字碼"
+    }
+
+    /// 原子換檔：目的地已存在就 replaceItemAt，否則直接搬過去
+    private static func replace(_ dst: String, with src: String) throws {
+        let fm = FileManager.default
+        let dstURL = URL(fileURLWithPath: dst), srcURL = URL(fileURLWithPath: src)
+        if fm.fileExists(atPath: dst) {
+            _ = try fm.replaceItemAt(dstURL, withItemAt: srcURL)
+        } else {
+            try fm.moveItem(at: srcURL, to: dstURL)
         }
     }
 

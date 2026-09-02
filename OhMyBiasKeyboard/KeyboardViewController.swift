@@ -318,7 +318,8 @@ final class KeyboardViewController: UIInputViewController {
             onDismiss: { [weak self] in
                 guard let self, let host = self.settingsPanelHost else { return }
                 self.dismissSettingsPanel(host)
-            })
+            },
+            onOpenSettings: { [weak self] url in self?.openContainerApp(url) })
         let host = UIHostingController(rootView: panel)
         addChild(host)
         host.view.translatesAutoresizingMaskIntoConstraints = false
@@ -335,6 +336,27 @@ final class KeyboardViewController: UIInputViewController {
         ])
         host.didMove(toParent: self)
         settingsPanelHost = host
+    }
+
+    /// ⚙ 面板「開啟設定」— 鍵盤 extension 開 URL 的路一代封一代：iOS 18 封了 responder chain
+    /// 的 openURL:，只剩 SwiftUI Link 的系統路徑；iOS 27（beta）連那條也不通。這裡把其餘已知
+    /// 的路都走一遍（Link 的系統路徑由 SwiftUI 自己走）：extensionContext.open（唯一有文件的
+    /// API，鍵盤通常回 false）→ 直接建 EnvironmentValues 拿 openURL — 最後一條也回報失敗才
+    /// 提示手動開啟。若 Link 那條其實成功了，app 已切到前景，多出來的 toast 沒人看到。
+    private func openContainerApp(_ url: URL) {
+        let viaSwiftUI: () -> Void = { [weak self] in
+            EnvironmentValues().openURL(url) { accepted in
+                guard !accepted else { return }
+                DispatchQueue.main.async {
+                    self?.showToast("無法自動開啟 — 請從主畫面開啟「OhMyBias 米」", duration: 2.5)
+                }
+            }
+        }
+        guard let ctx = extensionContext else { viaSwiftUI(); return }
+        ctx.open(url) { ok in
+            guard !ok else { return }
+            DispatchQueue.main.async(execute: viaSwiftUI)
+        }
     }
 
     private func dismissSettingsPanel(_ host: UIViewController) {
