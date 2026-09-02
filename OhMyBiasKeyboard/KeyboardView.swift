@@ -35,7 +35,7 @@ final class KeyboardView: UIView {
     var onKey: ((KeyAction) -> Void)?
     /// 地球鍵需綁 handleInputModeList — 由 controller 提供
     var onGlobeSetup: ((UIButton) -> Void)?
-    /// 面板頁記憶體不足時先呼叫此鉤子釋放引擎可選快取（反查表等），再重試一次
+    /// 面板頁記憶體不足時先呼叫此鉤子把所有可重建快取放掉（反查表、注音表、字形快取），再重試一次
     var onPanelMemoryRelief: (() -> Void)?
     /// 釋放後仍裝不了面板：已回退到字母頁 — controller 據此顯示提示
     var onPanelUnavailable: (() -> Void)?

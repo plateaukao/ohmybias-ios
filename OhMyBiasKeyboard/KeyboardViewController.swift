@@ -25,6 +25,7 @@ final class KeyboardViewController: UIInputViewController {
         super.viewDidLoad()
         SkinSettings.shared.reload()  // 讀取匯入的 cskin 設定（工具列/配色/字級/版面）
         CoreTextGlyphCache.install()  // 攔截 CoreText 的 emoji 字形快取，面板收掉時才能真的把記憶體要回來
+        MemoryBudget.extraRelief = { CoreTextGlyphCache.drain() }  // 引擎層釋放快取時一併清字形
         engine = InputEngine()
         engine.delegate = self
         engine.loadTable()
@@ -77,14 +78,15 @@ final class KeyboardViewController: UIInputViewController {
         MemoryBudget.trimIfNeeded(cinTable: engine.cinTable)
     }
 
-    /// 系統送記憶體警告 = 被 jetsam 殺掉前的最後機會，能放的全放。
-    /// 拆掉面板同時也讓 UIKit 有機會回收 emoji 字形等 process-wide 快取。
+    /// 系統送記憶體警告（約上限的七成）= 被 jetsam 殺掉前的最後機會，能放的全放。
+    /// 先放快取（反查表、注音表、emoji 字形）再量一次 — 通常光這樣就退回安全區；
+    /// 使用者正在看的面板是最後才拆的東西，否則「面板一開就被收掉」本身就是 bug。
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
+        MemoryBudget.releaseAll(cinTable: engine.cinTable)
+        guard MemoryBudget.isCritical else { return }
         if let host = settingsPanelHost { dismissSettingsPanel(host) }
         keyboardView.releasePanels()
-        CoreTextGlyphCache.drain()
-        MemoryBudget.releaseAll(cinTable: engine.cinTable)
     }
 
     // 深淺色：完全跟隨繼承的 trait（extension window 會即時跟系統外觀），
@@ -159,10 +161,12 @@ final class KeyboardViewController: UIInputViewController {
         }
         keyboardView.onKey = { [weak self] action in self?.handleKey(action) }
         keyboardView.onPanelMemoryRelief = { [weak self] in
-            self?.engine.cinTable.releaseOptionalCaches()
+            guard let self else { return }
+            MemoryBudget.releaseAll(cinTable: self.engine.cinTable)
         }
         keyboardView.onPanelUnavailable = { [weak self] in
-            self?.showToast("記憶體不足，暫時無法開啟面板", duration: 1.5)
+            // 帶上實測數字 — 使用者回報時就能看出這台機器的真實上限
+            self?.showToast("記憶體不足，暫時無法開啟面板（\(MemoryBudget.summary)）", duration: 2)
         }
         keyboardView.onGlobeSetup = { [weak self] button in
             guard let self else { return }
@@ -301,12 +305,9 @@ final class KeyboardViewController: UIInputViewController {
     /// 點齒輪展開/收起 — SwiftUI runtime（~10MB）在首次展開時才載入
     private func toggleSettingsPanel() {
         if let host = settingsPanelHost { dismissSettingsPanel(host); return }
-        if !MemoryBudget.canAfford(MemoryBudget.settingsPanel) {
-            engine.cinTable.releaseOptionalCaches()
-            guard MemoryBudget.canAfford(MemoryBudget.settingsPanel) else {
-                showToast("記憶體不足，暫時無法開啟面板", duration: 1.5)
-                return
-            }
+        guard MemoryBudget.makeRoom(for: MemoryBudget.settingsPanel, cinTable: engine.cinTable) else {
+            showToast("記憶體不足，暫時無法開啟面板（\(MemoryBudget.summary)）", duration: 2)
+            return
         }
         let panel = SettingsPanelView(
             onCommand: { [weak self] cmd in
