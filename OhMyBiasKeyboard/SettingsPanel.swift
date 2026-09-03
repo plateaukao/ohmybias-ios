@@ -1,17 +1,14 @@
 import SwiftUI
 
 /// ⚙ 面板 — 點工具列齒輪後蓋在鍵面區展開：把全部 ,, 指令做成可點的動作鈕
-/// （不必記指令、不必打字），外加「開啟設定」連結（iOS 18 起鍵盤 extension
-/// 只剩使用者親點 SwiftUI Link 這條開 URL 的路）。SwiftUI runtime 約 10MB，
-/// 只在首次展開此面板時才載入。
+/// （不必記指令、不必打字）。SwiftUI runtime 約 10MB，只在首次展開此面板時才載入。
+///
+/// 原本右下角有「開啟設定」連結（SwiftUI Link 是 iOS 18 起鍵盤 extension 唯一能開 URL 的路），
+/// iOS 27 起連那條也被封、按了只會跳「無法自動開啟」— 已移除；設定請從主畫面開容器 app。
 struct SettingsPanelView: View {
     /// 執行 ,, 指令（傳不含 ,, 前綴的指令名）
     var onCommand: (String) -> Void
     var onDismiss: () -> Void
-    /// 「開啟設定」— Link 的系統路徑之外，再交給 controller 多試幾條路（見 openContainerApp）
-    var onOpenSettings: (URL) -> Void
-
-    static let settingsURL = URL(string: "ohmybias://settings")!
 
     /// 一顆動作鈕：顯示名稱＋對應指令（指令當副標，順便記住鍵盤打法）
     private struct Command: Identifiable {
@@ -84,24 +81,6 @@ struct SettingsPanelView: View {
                         .cornerRadius(KeyboardTheme.cornerRadius)
                 }
                 Spacer()
-                Link(destination: Self.settingsURL) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "gearshape")
-                        Text("開啟設定")
-                    }
-                    .font(.system(size: 16, weight: .medium))
-                    .frame(height: 40)
-                    .padding(.horizontal, 16)
-                    .background(Color(KeyboardTheme.keySystem))
-                    .foregroundColor(Color(KeyboardTheme.textSystem))
-                    .cornerRadius(KeyboardTheme.cornerRadius)
-                }
-                // 保留 Link 原本的系統路徑（.systemAction，iOS 18–26 實測可用），
-                // 同時讓 controller 走 extensionContext.open 等其他路 — iOS 27 起系統路徑不通
-                .environment(\.openURL, OpenURLAction { url in
-                    onOpenSettings(url)
-                    return .systemAction
-                })
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 6)

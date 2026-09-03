@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### 移除
+- ⚙ 面板的「開啟設定」按鈕 — iOS 27 起鍵盤 extension 沒有任何能開容器 app 的路（SwiftUI Link、
+  extensionContext.open、EnvironmentValues.openURL 全部失效），按了只會跳「無法自動開啟」；
+  設定請從主畫面開「OhMyBias 米」
+
 ## [0.5.1] - 2026-09-03
 
 ### 修正

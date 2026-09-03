@@ -24,7 +24,7 @@ enum KeyAction {
     case cursorLeft                    // 游標左移
     case cursorRight                   // 游標右移
     case dismissKeyboard               // 收折鍵盤
-    case openSettings                  // 開啟容器 app 設定（ohmybias://）
+    case openSettings                  // 展開 ⚙ 指令面板
 }
 
 /// 純程式碼鍵盤面板：字母頁／數字頁／符號頁／注音查碼頁。
