@@ -19,7 +19,7 @@ final class InputEngine {
     weak var delegate: InputEngineDelegate?
 
     let cinTable: CINTable
-    let freqTracker: FreqTracker
+    let pinnedOrder: PinnedOrder
     private let ranker: CandidateRanker
     private let zhuyinLookup: ZhuyinLookup
     private let suggestionEngine: SuggestionEngine
@@ -32,13 +32,13 @@ final class InputEngine {
     }
 
     init(cinTable: CINTable? = nil,
-         freqTracker: FreqTracker? = nil,
+         pinnedOrder: PinnedOrder = .shared,
          zhuyinLookup: ZhuyinLookup = .shared,
          suggestionEngine: SuggestionEngine = .shared,
          wikiCorpus: WikiCorpus = .shared,
          prefs: IMEPreferences = DefaultPreferences.shared) {
         self.cinTable = cinTable ?? CINTable()
-        self.freqTracker = freqTracker ?? FreqTracker()
+        self.pinnedOrder = pinnedOrder
         self.zhuyinLookup = zhuyinLookup
         self.suggestionEngine = suggestionEngine
         self.prefs = prefs
@@ -127,10 +127,6 @@ final class InputEngine {
         cinTable.reload()
     }
 
-    func scheduleBackgroundTasks() {
-        freqTracker.deferredMerge()
-    }
-
     // MARK: - Public API (called by KeyboardViewController)
 
     func handleLetter(_ char: String) { sync {
@@ -199,7 +195,7 @@ final class InputEngine {
         // Pin mode: space confirms the pinned order
         if _isPinMode {
             if !_pinCode.isEmpty && !_pinPicked.isEmpty {
-                freqTracker.pin(code: _pinCode, chars: _pinPicked)
+                pinnedOrder.pin(code: _pinCode, chars: _pinPicked)
                 delegate?.engineDidShowToast("已固定 \(_pinCode) → \(_pinPicked.joined())")
             } else if !_pinCode.isEmpty && _pinPicked.isEmpty {
                 // No picks yet — treat as "show candidates"
@@ -217,7 +213,7 @@ final class InputEngine {
             _dispatchCommaCommand(); return
         }
         if _currentCandidates.isEmpty {
-            // 英文直通：無候選時空白鍵把打的字串原樣送出（不記字頻）—
+            // 英文直通：無候選時空白鍵把打的字串原樣送出 —
             // 空白鍵本身也要上屏，如同英文模式打字尾隨空格
             let raw = _composing
             _resetComposing()
@@ -228,7 +224,7 @@ final class InputEngine {
     } }
 
     /// 點候選列左側的組字碼 — 字母原樣上屏（英文直通的手動版：有候選但使用者
-    /// 要英文單字時用；不記字頻、不帶尾隨空格）
+    /// 要英文單字時用；不帶尾隨空格）
     func commitComposingRaw() { sync {
         if _composing.isEmpty || _isPinMode || _isInCommaCommand ||
             _isZhuyinMode || _isPinyinMode || _isSameSoundMode { return }
@@ -583,7 +579,6 @@ final class InputEngine {
         let modeMap: [String: InputMode] = [
             "t": .t, "s": .s, "sp": .sp, "sl": .sl, "ts": .ts, "st": .st, "j": .j
         ]
-        if cmd == "rs" { freqTracker.reset(); delegate?.engineDidShowToast("字頻已重置"); return }
         if cmd == "rl" { cinTable.reload(); UserPhrases.shared.reload(); delegate?.engineDidShowToast("字表已重載"); return }
         if cmd == "pin" {
             _isZhuyinMode = false; _clearZhuyinSlots()
@@ -599,8 +594,8 @@ final class InputEngine {
             let arg = String(cmd.dropFirst(5))  // e.g. "unpina" → "a"
             if arg.isEmpty {
                 delegate?.engineDidShowToast("用法：,,UNPIN + 碼（如 ,,UNPINa）")
-            } else if freqTracker.pinnedChars(forCode: arg) != nil {
-                freqTracker.unpin(code: arg)
+            } else if pinnedOrder.chars(forCode: arg) != nil {
+                pinnedOrder.unpin(code: arg)
                 delegate?.engineDidShowToast("已解除 \(arg) 的固定排序")
             } else {
                 delegate?.engineDidShowToast("\(arg) 無固定排序")
@@ -812,11 +807,11 @@ final class InputEngine {
             return
         }
         let raw = _isWildcard ? cinTable.wildcardLookup(code) : cinTable.lookup(code)
-        _currentCandidates = ranker.rank(raw: raw, code: code, prev: _lastCommitted,
-                                         mode: _inputMode, cinTable: cinTable, freqTracker: freqTracker)
+        _currentCandidates = ranker.rank(raw: raw, code: code, mode: _inputMode,
+                                         cinTable: cinTable, pinnedOrder: pinnedOrder)
 
         // 常用語自訂組字碼：排在字表候選之後（撞碼時不擠掉原本的字；獨佔碼時就是唯一候選，
-        // 「唯一候選自動送出」開著會直接上屏）。不經字頻排序 — 位置固定可預期。
+        // 「唯一候選自動送出」開著會直接上屏）。不受固定排序影響 — 位置固定可預期。
         if !_isWildcard {
             let shortcuts = cinTable.shortcutLookup(code)
             if !shortcuts.isEmpty {
@@ -863,14 +858,6 @@ final class InputEngine {
             delegate?.engineDidCommitPair(text, right)
         } else {
             delegate?.engineDidCommit(text)
-        }
-        if !_composing.isEmpty && !_isSameSoundMode {
-            freqTracker.record(code: _composing, char: text)
-            freqTracker.recordBigram(prev: _lastCommitted, char: text)
-            if !_prevCommitted.isEmpty {
-                freqTracker.recordTrigram(prev2: _prevCommitted, prev1: _lastCommitted, char: text)
-            }
-            freqTracker.saveIfNeeded()
         }
         // Domain context tracking
         ranker.updateDomainContext(text)

@@ -29,7 +29,6 @@ final class KeyboardViewController: UIInputViewController {
         engine = InputEngine()
         engine.delegate = self
         engine.loadTable()
-        engine.scheduleBackgroundTasks()
         // 還原上次使用的語言模式（EN/中文）
         engine.setEnglishMode(OhMyBiasPrefs.lastEnglishMode)
         keyboardView.isEnglishMode = engine.isEnglishMode
@@ -74,8 +73,6 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        // 收鍵盤時把未寫入的字頻紀錄落盤 — extension 被殺也不掉學習資料
-        engine.freqTracker.flushAll()
         // 面板留著沒人看，但 cell／圖層／SwiftUI 會一直佔記憶體 — 收鍵盤即拆
         if let host = settingsPanelHost { dismissSettingsPanel(host) }
         keyboardView.releasePanels()

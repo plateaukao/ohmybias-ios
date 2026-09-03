@@ -19,7 +19,6 @@ swiftc \
     -module-name OhMyBiasTests \
     -target arm64-apple-macos14.0 \
     -sdk "$(xcrun --show-sdk-path)" \
-    -lsqlite3 \
     -O \
     -o "$BINDIR/ohmybias_tests" \
     $SOURCES $TEST_SOURCES

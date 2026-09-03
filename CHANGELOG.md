@@ -6,6 +6,10 @@
 - ⚙ 面板的「開啟設定」按鈕 — iOS 27 起鍵盤 extension 沒有任何能開容器 app 的路（SwiftUI Link、
   extensionContext.open、EnvironmentValues.openURL 全部失效），按了只會跳「無法自動開啟」；
   設定請從主畫面開「OhMyBias 米」
+- 字頻學習（FreqTracker）— 同碼字依使用習慣自動排序與 `,,RS` 重置，連同 freq.db、SQLite 與 iCloud
+  合併一併移除：那是鍵盤一啟動就常駐、又不在任何釋放路徑上的三張字典，換來的只有同碼字的順序。
+  候選順序回到 liu.cin 原序；`,,PIN`／`,,UNPIN` 固定排序保留，改存 App Group 的 pinned.txt
+  （與 Android 版同格式）— 之前存在 freq.db 裡的固定排序需重設一次
 
 ## [0.5.1] - 2026-09-03
 

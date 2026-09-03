@@ -30,13 +30,13 @@ Shared 引擎平台無關，測試在 **macOS host** 上以 swiftc 編譯執行�
 
 ## Architecture
 
-- `Shared/`：**禁止 import UIKit**（唯一例外 `ClipboardProcessor.swift`）。`InputEngine.swift` 是核心狀態機（組字、選字、`,,` 指令、注音/拼音/同音查碼模式），透過 `InputEngineDelegate` 回呼；`IMEPreferences` 為可注入的偏好協定。`WikiCorpus` 在本專案是**極簡版**：只載 `phrases.bin`（PHM2 mmap，轉檔工具在 ohmybias-android `tools/convert_phrases_v2.py`），其餘上游 API 回空。`FreqTracker` = freq.db SQLite 字頻學習＋`,,PIN` 固定排序（上游 iOS 側，含 iCloud merge）。
+- `Shared/`：**禁止 import UIKit**（唯一例外 `ClipboardProcessor.swift`）。`InputEngine.swift` 是核心狀態機（組字、選字、`,,` 指令、注音/拼音/同音查碼模式），透過 `InputEngineDelegate` 回呼；`IMEPreferences` 為可注入的偏好協定。`WikiCorpus` 在本專案是**極簡版**：只載 `phrases.bin`（PHM2 mmap，轉檔工具在 ohmybias-android `tools/convert_phrases_v2.py`），其餘上游 API 回空。`PinnedOrder` = `,,PIN` 固定排序（pinned.txt，與 Android 同格式）；字頻學習已移除，候選順序以 liu.cin 為準。
 - `OhMyBiasKeyboard/`：`KeyboardViewController`（UIInputViewController）= `InputEngineDelegate` 的 iOS 實作；`KeyboardView` 字母/數字/符號/注音四頁；`CandidateBar` 候選列（聯想詞以藍字顯示，composing 為空時點選直接送出）。
 - `OhMyBiasApp/`：SwiftUI 容器 — 匯入 liu.cin（`CINCompiler` 現場編成 liu.bin）、偏好 toggle、自訂詞編輯。
-- 資料共享：App Group `group.info.plateaukao.ohmybias`（`AppConstants.sharedDir`）— liu.cin/liu.bin、freq.db、tables/、user_phrases.txt；偏好經 `UserDefaults(suiteName:)`（`OhMyBiasPrefs`）。
+- 資料共享：App Group `group.info.plateaukao.ohmybias`（`AppConstants.sharedDir`）— liu.cin/liu.bin、tables/、user_phrases.txt、pinned.txt；偏好經 `UserDefaults(suiteName:)`（`OhMyBiasPrefs`）。
 - Bundle IDs：app `info.plateaukao.ohmybias`、鍵盤 `info.plateaukao.ohmybias.keyboard`。
 
-按鍵資料流：tap → `KeyboardViewController.handleKey` → `InputEngine`（`CINTable` mmap 查表、`CandidateRanker`＋`FreqTracker` 排序）→ delegate → CandidateBar／textDocumentProxy。commit 後 `SuggestionEngine` 產生聯想（user_phrases → 萌典詞組）。
+按鍵資料流：tap → `KeyboardViewController.handleKey` → `InputEngine`（`CINTable` mmap 查表、`CandidateRanker` 固定排序＋模式過濾）→ delegate → CandidateBar／textDocumentProxy。commit 後 `SuggestionEngine` 產生聯想（user_phrases → 萌典詞組）。
 
 ## 注意事項
 

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Candidate ranking: freq-based sorting, mode filtering, domain context, fuzzy match.
+/// Candidate ranking: pinned order, mode filtering, domain context, fuzzy match.
 final class CandidateRanker {
 
     private let wikiCorpus: WikiCorpus
@@ -48,9 +48,9 @@ final class CandidateRanker {
     // MARK: - Mode filtering + ranking
 
     /// Sort and filter candidates based on current input mode.
-    func rank(raw: [String], code: String, prev: String,
-              mode: InputEngine.InputMode, cinTable: CINTable, freqTracker: FreqTracker) -> [String] {
-        var candidates = freqTracker.sortedWithContext(raw, forCode: code, prev: prev)
+    func rank(raw: [String], code: String,
+              mode: InputEngine.InputMode, cinTable: CINTable, pinnedOrder: PinnedOrder) -> [String] {
+        var candidates = pinnedOrder.apply(raw, forCode: code)
 
         switch mode {
         case .sp:

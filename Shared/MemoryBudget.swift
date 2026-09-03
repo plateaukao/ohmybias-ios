@@ -8,7 +8,6 @@ enum MemoryBudget {
     static let total: Int = 40
 
     static let cinTable: Int = 10       // table dict + trie + cache parse
-    static let freqTracker: Int = 2     // SQLite + prepared statements
     static let phrasesBin: Int = 1      // mmap phrases.bin
     static let zhuyinLookup: Int = 1    // mmap zhuyin/pinyin/char_freq .bin（lazy；JSON fallback 才會吃到 ~4MB）
     static let reverseTable: Int = 4    // CINTable reverse lookup (lazy)

@@ -14,10 +14,7 @@ struct SettingsPanelView: View {
     private struct Command: Identifiable {
         let id: String        // 指令名（不含 ,,）
         let label: String
-        var destructive = false
-        init(_ id: String, _ label: String, destructive: Bool = false) {
-            self.id = id; self.label = label; self.destructive = destructive
-        }
+        init(_ id: String, _ label: String) { self.id = id; self.label = label }
     }
 
     private struct Group: Identifiable {
@@ -41,12 +38,8 @@ struct SettingsPanelView: View {
         Group(id: "其他", commands: [
             Command("sg", "聯想開關"), Command("c", "目前模式"),
             Command("pin", "固定排序"), Command("rl", "重載字表"),
-            Command("rs", "重置字頻", destructive: true),
         ]),
     ]
-
-    /// 破壞性指令需點兩次 — 第一次亮紅字提示，再點才執行
-    @State private var pendingDestructive: String?
 
     private let columns = [GridItem(.adaptive(minimum: 104), spacing: 6)]
 
@@ -89,17 +82,11 @@ struct SettingsPanelView: View {
     }
 
     private func button(for command: Command) -> some View {
-        let isPending = pendingDestructive == command.id
-        return Button {
-            if command.destructive && !isPending {
-                pendingDestructive = command.id
-                return
-            }
-            pendingDestructive = nil
+        Button {
             onCommand(command.id)
         } label: {
             VStack(spacing: 1) {
-                Text(isPending ? "再點一次確認" : command.label)
+                Text(command.label)
                     .font(.system(size: 15))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -110,7 +97,7 @@ struct SettingsPanelView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 42)
             .background(Color(KeyboardTheme.keySystem))
-            .foregroundColor(command.destructive ? .red : Color(KeyboardTheme.textSystem))
+            .foregroundColor(Color(KeyboardTheme.textSystem))
             .cornerRadius(KeyboardTheme.cornerRadius)
         }
     }

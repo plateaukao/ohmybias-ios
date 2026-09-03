@@ -60,8 +60,9 @@ func makeFixtureTable() -> CINTable {
     return table
 }
 
-func makeEngine(prefs: MockPrefs = MockPrefs()) -> (InputEngine, MockEngineDelegate) {
+func makeEngine(prefs: MockPrefs = MockPrefs(), pinned: PinnedOrder? = nil) -> (InputEngine, MockEngineDelegate) {
     let engine = InputEngine(cinTable: makeFixtureTable(),
+                             pinnedOrder: pinned ?? PinnedOrder(path: NSTemporaryDirectory() + "pinned_\(UUID().uuidString).txt"),
                              suggestionEngine: SuggestionEngine(prefs: prefs),
                              prefs: prefs)
     let mock = MockEngineDelegate()
@@ -135,8 +136,39 @@ func testEngineComposeAndCommit() {
     checkEqual(engine.composing, "", "composing cleared after commit")
 }
 
+func testPinnedOrder() {
+    // 檔案格式：一行一碼、tab 分欄；非 BMP 字原樣一欄
+    let parsed = PinnedOrder.parse("hj\t乎\t手\nab\t𠮷\t明\n\n")
+    checkEqual(parsed["hj"] ?? [], ["乎", "手"], "parse pinned line")
+    checkEqual(parsed["ab"] ?? [], ["𠮷", "明"], "parse non-BMP char as one column")
+    checkEqual(PinnedOrder.parse(PinnedOrder.serialize(parsed)), parsed, "serialize roundtrip")
+
+    // 沒有檔案 → 內建預設 hj → 手乎；apply 只重排、不增減
+    let path = NSTemporaryDirectory() + "pinned_\(UUID().uuidString).txt"
+    let store = PinnedOrder(path: path)
+    checkEqual(store.apply(["乎", "手", "x"], forCode: "hj"), ["手", "乎", "x"], "default pin applies")
+    checkEqual(store.apply(["a", "b"], forCode: "zz"), ["a", "b"], "unpinned code untouched")
+
+    // 引擎：,,PIN → 打 hj → 選 乎 → 空白確認 → 再打 hj 時 乎 排第一；,,UNPINhj 後回字表原序
+    let (engine, _) = makeEngine(pinned: store)
+    engine.runCommaCommand("pin")
+    engine.handleLetter("h"); engine.handleLetter("j")
+    guard let idx = engine.currentCandidates.firstIndex(of: "乎") else { check(false, "hj shows 乎 in pin mode"); return }
+    engine.selectCandidate(at: idx)
+    engine.handleSpace()
+    engine.handleLetter("h"); engine.handleLetter("j")
+    checkEqual(engine.currentCandidates.first ?? "", "乎", "pinned char comes first")
+    engine.handleEscape()
+    checkEqual(PinnedOrder(path: path).chars(forCode: "hj") ?? [], ["乎"], "pin persisted to file")
+    engine.runCommaCommand("unpinhj")
+    engine.handleLetter("h"); engine.handleLetter("j")
+    checkEqual(engine.currentCandidates, engine.cinTable.lookup("hj"), "unpin restores table order")
+    check(PinnedOrder(path: path).chars(forCode: "hj") == nil, "unpin persisted")
+    try? FileManager.default.removeItem(atPath: path)
+}
+
 func testEngineCommitComposingRaw() {
-    // 有候選但使用者要英文單字：點組字碼原樣上屏（不帶尾隨空格、不記字頻）
+    // 有候選但使用者要英文單字：點組字碼原樣上屏（不帶尾隨空格）
     let (engine, mock) = makeEngine()
     engine.handleLetter("a")
     check(!engine.currentCandidates.isEmpty, "有候選")
@@ -487,6 +519,7 @@ testCINCompileRoundtrip()
 testCINCompileEncodings()
 testEngineComposeAndCommit()
 testEngineCommitComposingRaw()
+testPinnedOrder()
 testEngineEnglishPassthrough()
 testEngineOverflowAutoCommit()
 testEngineBackspaceAndEscape()
