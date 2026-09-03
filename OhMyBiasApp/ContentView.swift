@@ -267,6 +267,8 @@ struct ContentView: View {
             try replace(AppConstants.cinPath, with: tmpCin)
             try replace(dir + "/liu.bin", with: tmpBin)
         } catch { return "無法寫入字表：\(error.localizedDescription)" }
+        // 字表到手就回嘸蝦米 — 匯入前打不出中文而切去的英文模式不該延續到有字表之後
+        OhMyBiasPrefs.resetToChineseMode()
         return "已編譯 \(count) 個字碼"
     }
 

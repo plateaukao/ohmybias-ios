@@ -40,9 +40,10 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         applyToolbarBackground()
-        // 容器 app 改過常用語（含組字碼）— extension 行程可能還活著，比對檔案時間重套捷徑
+        // 容器 app 匯入過新字表／改過常用語（含組字碼）— extension 行程可能還活著，比對檔案時間重載
+        engine.cinTable.reloadIfBinChanged()
         engine.cinTable.reloadShortcutsIfNeeded()
-        syncFieldEnglishMode()
+        syncFieldEnglishMode(reapplyPrefs: true)
         // 只有鍵面實際會變才重建按鍵（syncSessionState 內比對短路）
         keyboardView.syncSessionState(
             needsSwitchKey: needsInputModeSwitchKey,
@@ -56,13 +57,17 @@ final class KeyboardViewController: UIInputViewController {
         syncFieldEnglishMode()
     }
 
-    /// 密碼類（secure）與 asciiCapable 欄位暫時英文直通（不寫 lastEnglishMode — 離開欄位就還原）
-    private func syncFieldEnglishMode() {
+    /// 密碼類（secure）與 asciiCapable 欄位暫時英文直通（不寫 lastEnglishMode — 離開欄位就還原）。
+    /// `reapplyPrefs`：鍵盤每次出現時連偏好裡的中英狀態一起重套 — 容器 app 匯入 liu.cin 會把它
+    /// 歸零成中文，而 extension 行程可能還活著、viewDidLoad 讀的是舊值。
+    /// 逐鍵的 textDidChange 不重套：在密碼欄手動切回中文（不存偏好）不能被下一鍵又切回英文
+    private func syncFieldEnglishMode(reapplyPrefs: Bool = false) {
         let proxy = textDocumentProxy
         let forced = (proxy.isSecureTextEntry ?? false) || proxy.keyboardType == .asciiCapable
-        guard forced != forcedEnglishForField else { return }
+        let want = forced ? true : OhMyBiasPrefs.lastEnglishMode
+        guard forced != forcedEnglishForField || (reapplyPrefs && want != engine.isEnglishMode) else { return }
         forcedEnglishForField = forced
-        engine.setEnglishMode(forced ? true : OhMyBiasPrefs.lastEnglishMode)
+        engine.setEnglishMode(want)
         keyboardView.isEnglishMode = engine.isEnglishMode
         refreshIdleBar()
     }

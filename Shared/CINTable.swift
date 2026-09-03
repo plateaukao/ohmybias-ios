@@ -87,13 +87,32 @@ final class CINTable {
 
     // MARK: - Load
 
+    private static var binPath: String { AppConstants.sharedDir + "/liu.bin" }
+
+    /// 載入時 liu.bin 的修改時間 — 鍵盤出現時比對，容器 app 換過字表就重載
+    private var loadedBinDate: Date?
+
+    private static func binModificationDate() -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: binPath))?[.modificationDate] as? Date
+    }
+
+    /// liu.bin 被換過（容器 app 重新匯入、或從無到有）就整個重載；沒變什麼都不做。
+    /// extension 行程可能跨越一次匯入還活著：replaceItemAt 換的是 inode，舊 mmap 仍指著舊檔，
+    /// 不重載就一直是「匯入了卻打不出字」— 直到系統把行程殺掉為止
+    @discardableResult
+    func reloadIfBinChanged() -> Bool {
+        guard Self.binModificationDate() != loadedBinDate else { return false }
+        reload()
+        return true
+    }
+
     func reload() {
         binData = nil; entryCount = 0; overlay = [:]
         _reverseTable = nil; _shortestCodes = nil; _longestCodes = nil
         _t2s = nil; _s2t = nil
 
         // 1. Try mmap binary from shared dir
-        let userBin = AppConstants.sharedDir + "/liu.bin"
+        let userBin = Self.binPath
         if FileManager.default.fileExists(atPath: userBin) {
             loadBin(path: userBin)
         }
@@ -107,6 +126,7 @@ final class CINTable {
                 if entryCount == 0 { parseCINIntoOverlay(path: cinPath) }
             }
         }
+        loadedBinDate = Self.binModificationDate()
         // 3. Extras
         loadExtras()
         // 4. 繁簡對照表不在此載入 — 交給 t2s/s2t 存取器 lazy 觸發

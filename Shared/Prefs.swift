@@ -71,10 +71,22 @@ struct OhMyBiasPrefs {
         set { defaults.set(newValue, forKey: "homophoneMultiReading") }
     }
 
-    /// 上次使用的語言模式（true = 英文）— 鍵盤啟動時還原
+    /// 上次使用的語言模式（true = 英文）— 鍵盤啟動時還原。預設嘸蝦米（米）；
+    /// app 首次啟動與匯入 liu.cin 時歸零（見 resetToChineseMode）
     static var lastEnglishMode: Bool {
         get { defaults.object(forKey: "lastEnglishMode") as? Bool ?? false }
         set { defaults.set(newValue, forKey: "lastEnglishMode") }
+    }
+
+    /// 語言模式歸零成嘸蝦米。還沒字表時使用者常切到英文（中文打不出來），
+    /// 字表一匯入就該回中文，不該把那個權宜狀態帶著走；首次啟動也清 —
+    /// App Group 偏好會跟著備份還原／覆蓋安裝留下來，別讓舊裝置的英文狀態變成新裝置的預設
+    static func resetToChineseMode() { lastEnglishMode = false }
+
+    /// 容器 app 首次啟動整理是否已做過
+    static var firstLaunchDone: Bool {
+        get { defaults.bool(forKey: "firstLaunchDone") }
+        set { defaults.set(newValue, forKey: "firstLaunchDone") }
     }
 
     /// 中文（米）模式字母鍵以大寫顯示 — 嘸蝦米字根表慣用大寫，與實體鍵帽一致；
