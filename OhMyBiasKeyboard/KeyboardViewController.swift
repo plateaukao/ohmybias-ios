@@ -38,6 +38,10 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        // 容器 app 可改皮膚或自訂工具列；extension 行程仍活著時也在此重讀。
+        SkinSettings.shared.reload()
+        candidateBar.reloadToolbar()
+        candidateBar.setEnglishMode(engine.isEnglishMode)
         applyToolbarBackground()
         // 容器 app 匯入過新字表／改過常用語（含組字碼）— extension 行程可能還活著，比對檔案時間重載
         engine.cinTable.reloadIfBinChanged()
@@ -150,7 +154,7 @@ final class KeyboardViewController: UIInputViewController {
             keyboardView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
-        keyboardView.yieldTopMargin = { [weak self] in self?.candidateBar.hasScrollableCandidates ?? false }
+        keyboardView.yieldTopMargin = { [weak self] in self?.candidateBar.yieldsTopMargin ?? false }
         candidateBar.onSelect = { [weak self] idx in self?.didSelectCandidate(at: idx) }
         candidateBar.onToolbarKey = { [weak self] action in self?.handleKey(action) }
         candidateBar.onDismissSuggestions = { [weak self] in self?.clearSuggestions() }
