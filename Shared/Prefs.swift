@@ -108,6 +108,26 @@ struct OhMyBiasPrefs {
         set { defaults.set(min(max(newValue, 0.85), 1.4), forKey: "keyboardHeightScale") }
     }
 
+    /// 容器 app 自訂的十格工具列；nil 代表跟隨目前皮膚的 toolbarButtons。
+    static var toolbarButtons: [Int]? {
+        get {
+            guard let value = defaults.string(forKey: "toolbarButtons") else { return nil }
+            let buttons = value.split(separator: ",").compactMap {
+                Int($0.trimmingCharacters(in: .whitespaces))
+            }
+            return buttons.isEmpty ? nil : buttons
+        }
+        set {
+            guard let newValue, !newValue.isEmpty else {
+                defaults.removeObject(forKey: "toolbarButtons")
+                SkinSettings.shared.invalidate()
+                return
+            }
+            defaults.set(newValue.map(String.init).joined(separator: ","), forKey: "toolbarButtons")
+            SkinSettings.shared.invalidate()
+        }
+    }
+
     /// 詞庫開關 — 極簡版僅萌典詞組，預設開啟
     static func domainEnabled(_ key: String) -> Bool {
         defaults.object(forKey: key) as? Bool ?? (key == "domain_phrases")

@@ -63,6 +63,9 @@ struct ContentView: View {
                     Text(skinStatus).font(.footnote)
                     Link("鍵盤外觀編輯器（網頁）", destination: skinDesignerURL)
                     Button("匯入皮膚（.cskin）") { pendingImport = .skin; showImporter = true }
+                    NavigationLink("自訂工具列") {
+                        ToolbarSettingsView()
+                    }
                     if SkinSettings.shared.isImported {
                         Button("還原內建皮膚", role: .destructive) { resetSkin() }
                     }

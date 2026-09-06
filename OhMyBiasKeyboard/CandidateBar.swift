@@ -1,5 +1,36 @@
 import UIKit
 
+/// 以紅框標示工具列按鈕實際會接到觸控轉發的區域，方便在實機調整可點範圍。
+private final class ToolbarButton: UIButton {
+#if DEBUG
+    private let touchAreaBorder = CAShapeLayer()
+#endif
+    var leadingTouchExtension: CGFloat = 2 { didSet { setNeedsLayout() } }
+    var trailingTouchExtension: CGFloat = 2 { didSet { setNeedsLayout() } }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+#if DEBUG
+        touchAreaBorder.fillColor = UIColor.clear.cgColor
+        touchAreaBorder.strokeColor = UIColor.systemRed.withAlphaComponent(0.8).cgColor
+        touchAreaBorder.lineWidth = 1
+        touchAreaBorder.zPosition = 1
+        layer.addSublayer(touchAreaBorder)
+#endif
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+#if DEBUG
+        let area = bounds.inset(by: UIEdgeInsets(top: 2, left: -leadingTouchExtension,
+                                                  bottom: 2, right: -trailingTouchExtension))
+        touchAreaBorder.path = UIBezierPath(roundedRect: area, cornerRadius: 5).cgPath
+#endif
+    }
+}
+
 /// 候選字列：左側 composing 碼、右側水平捲動候選字／聯想詞。
 /// 空閒時顯示目前輸入法模式＋sweetlime 工具列（組字/候選出現時自動隱藏）。
 final class CandidateBar: UIView {
@@ -24,7 +55,7 @@ final class CandidateBar: UIView {
     private let toolbarStack = UIStackView()
     private var languageButton: UIButton?
 
-    /// 工具列項目：由 cskin 的 toolbarButtons 按鈕 ID 對應而來
+    /// 工具列項目：由 SkinSettings 的 toolbarButtons 按鈕 ID 對應而來
     private struct ToolbarItem {
         let icon: String?    // SF Symbol 名稱
         let text: String?    // 無合適圖示時用文字
@@ -33,30 +64,30 @@ final class CandidateBar: UIView {
         var isLanguage = false
     }
 
-    /// Hamster 按鈕 ID → 本鍵盤可實作的項目；nil = 不可實作 → 空白佔位。
-    /// （4 簡繁、6 剪貼本、10-12/14-15 編輯、18-25/31 Hamster 專屬 → 空）
+    /// 工具列 ID → 本鍵盤動作。顯示定義由 Shared/ToolbarItems.swift 共用。
     private static func item(forButtonID id: Int) -> ToolbarItem? {
+        guard let definition = ToolbarItems.definition(for: id) else { return nil }
+        let action: KeyAction
         switch id {
-        case 1:  return ToolbarItem(icon: "gearshape", text: nil, label: "設定", action: .openSettings)
-        case 2:  return ToolbarItem(icon: "chevron.down", text: nil, label: "收折鍵盤", action: .dismissKeyboard)
-        case 3:  return ToolbarItem(icon: nil, text: "米", label: "中英切換", action: .toggleLanguage, isLanguage: true)
-        case 5:  return ToolbarItem(icon: "heart.fill", text: nil, label: "常用語", action: .toggleToolbarPage(.phrases))
-        case 7:  return ToolbarItem(icon: "curlybraces", text: nil, label: "符號面板", action: .toggleToolbarPage(.symbolPanel))
-        case 8:  return ToolbarItem(icon: "face.smiling", text: nil, label: "Emoji", action: .toggleToolbarPage(.emoji))
+        case 1: action = .openSettings
+        case 2: action = .dismissKeyboard
+        case 3: action = .toggleLanguage
+        case 5, 10: action = .toggleToolbarPage(.phrases)
+        case 7, 30: action = .toggleToolbarPage(.symbolPanel)
+        case 8: action = .toggleToolbarPage(.emoji)
         case 9:
             let page: KeyboardView.Page = SkinSettings.shared.keyboardLayout == "row" ? .numbers : .numeric9
-            return ToolbarItem(icon: "textformat.123", text: nil, label: "數字鍵盤", action: .toggleToolbarPage(page))
-        // 全選在 iOS 鍵盤 extension 無 API 不可實作 — 依使用者決定，此位置固定放 ♥ 常用語
-        case 10: return ToolbarItem(icon: "heart.fill", text: nil, label: "常用語", action: .toggleToolbarPage(.phrases))
-        case 13: return ToolbarItem(icon: "doc.on.clipboard", text: nil, label: "貼上", action: .pasteClipboard)
-        case 16: return ToolbarItem(icon: "arrow.left", text: nil, label: "游標左移", action: .cursorLeft)
-        case 17: return ToolbarItem(icon: "arrow.right", text: nil, label: "游標右移", action: .cursorRight)
-        case 26: return ToolbarItem(icon: nil, text: "顏", label: "顏文字", action: .toggleToolbarPage(.kaomojis))
-        case 27: return ToolbarItem(icon: nil, text: "ㄅ", label: "注音查碼", action: .enterZhuyin)
-        case 29: return ToolbarItem(icon: "textformat.123", text: nil, label: "九宮格數字", action: .toggleToolbarPage(.numeric9))
-        case 30: return ToolbarItem(icon: "curlybraces", text: nil, label: "符號面板", action: .toggleToolbarPage(.symbolPanel))
+            action = .toggleToolbarPage(page)
+        case 13: action = .pasteClipboard
+        case 16: action = .cursorLeft
+        case 17: action = .cursorRight
+        case 26: action = .toggleToolbarPage(.kaomojis)
+        case 27: action = .enterZhuyin
+        case 29: action = .toggleToolbarPage(.numeric9)
         default: return nil
         }
+        return ToolbarItem(icon: definition.icon, text: definition.text, label: definition.label,
+                           action: action, isLanguage: definition.isLanguage)
     }
 
     /// 語言鍵顯示目前輸入法：嘸蝦米 →「米」、英文 →「英」
@@ -120,28 +151,7 @@ final class CandidateBar: UIView {
         toolbarStack.spacing = 4
         toolbarStack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(toolbarStack)
-        // 照 cskin toolbarButtons 序列建構；做不到的按鈕 ID（含 0 佔位符）留空格
-        for id in SkinSettings.shared.toolbarButtons {
-            guard let item = Self.item(forButtonID: id) else {
-                toolbarStack.addArrangedSubview(UIView())
-                continue
-            }
-            let b = UIButton(type: .system)
-            if let icon = item.icon {
-                let config = UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)
-                b.setImage(UIImage(systemName: icon, withConfiguration: config), for: .normal)
-                b.tintColor = KeyboardTheme.toolbarColor
-            } else if let text = item.text {
-                b.setTitle(text, for: .normal)
-                b.titleLabel?.font = .systemFont(ofSize: 19)
-                b.setTitleColor(KeyboardTheme.toolbarColor, for: .normal)
-            }
-            b.accessibilityLabel = item.label
-            let action = item.action
-            b.addAction(UIAction { [weak self] _ in self?.onToolbarKey?(action) }, for: .touchUpInside)
-            toolbarStack.addArrangedSubview(b)
-            if item.isLanguage { languageButton = b }
-        }
+        buildToolbar()
 
         dismissWidth = dismissButton.widthAnchor.constraint(equalToConstant: 0)
         NSLayoutConstraint.activate([
@@ -170,6 +180,48 @@ final class CandidateBar: UIView {
             overflowHint.widthAnchor.constraint(equalToConstant: 18),
         ])
         updateToolbarVisibility()
+    }
+
+    /// 偏好或皮膚更新後，鍵盤再次顯示時套用新的工具列。
+    func reloadToolbar() {
+        backgroundColor = KeyboardTheme.glassHost ? .clear : KeyboardTheme.toolbarBackground
+        overflowHint.backgroundColor = KeyboardTheme.glassHost ? .clear : KeyboardTheme.toolbarBackground
+        buildToolbar()
+    }
+
+    private func buildToolbar() {
+        languageButton = nil
+        for view in toolbarStack.arrangedSubviews {
+            toolbarStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+        var buttons: [ToolbarButton] = []
+        // 自訂設定優先於 cskin；不可實作的 ID（含 0）保留空白格。
+        for id in SkinSettings.shared.toolbarButtons {
+            guard let item = Self.item(forButtonID: id) else {
+                toolbarStack.addArrangedSubview(UIView())
+                continue
+            }
+            let b = ToolbarButton(type: .system)
+            if let icon = item.icon {
+                let config = UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)
+                b.setImage(UIImage(systemName: icon, withConfiguration: config), for: .normal)
+                b.tintColor = KeyboardTheme.toolbarColor
+            } else if let text = item.text {
+                b.setTitle(text, for: .normal)
+                b.titleLabel?.font = .systemFont(ofSize: 19)
+                b.setTitleColor(KeyboardTheme.toolbarColor, for: .normal)
+            }
+            b.accessibilityLabel = item.label
+            let action = item.action
+            b.addAction(UIAction { [weak self] _ in self?.onToolbarKey?(action) }, for: .touchUpInside)
+            toolbarStack.addArrangedSubview(b)
+            buttons.append(b)
+            if item.isLanguage { languageButton = b }
+        }
+        // Stack 的 4pt 間距會交給最近的按鈕；兩端 8pt 邊界同樣可點，因此框線延伸到其觸控區。
+        buttons.first?.leadingTouchExtension = 8
+        buttons.last?.trailingTouchExtension = 8
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -204,23 +256,24 @@ final class CandidateBar: UIView {
     /// 候選字之間的 4pt 間距同理。只在間距範圍內轉發（gapSlop），佔位空格中央仍留白。
     private static let gapSlop: CGFloat = 12
 
-    /// 候選列與鍵面之間的縫（鍵面頂端 6pt 留白）在有候選時也算候選捲動區：
-    /// 從縫裡起手橫滑要能捲候選，而不是打到第一排鍵。KeyboardView.hitTest 對
-    /// 這條帶子讓路（yieldTopMargin），這裡把命中範圍往下延伸接手。
+    /// 候選列與鍵面之間的縫（鍵面頂端 6pt 留白）也算工具列／候選列的觸控區：
+    /// 拇指點工具列下緣或從縫裡橫滑候選時，不應被第一排鍵吃掉。
     static let bottomSlop: CGFloat = 6
-    /// 候選捲動區目前可見（有候選或聯想）— KeyboardView 據此決定頂端留白是否讓路
+    /// 候選捲動區目前可見（有候選或聯想）
     var hasScrollableCandidates: Bool { !scrollView.isHidden }
+    /// 工具列或候選列可見時，KeyboardView 讓出其頂端留白。
+    var yieldsTopMargin: Bool { hasScrollableCandidates || !toolbarStack.isHidden }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         if super.point(inside: point, with: event) { return true }
-        guard hasScrollableCandidates else { return false }
+        guard yieldsTopMargin else { return false }
         return point.x >= 0 && point.x < bounds.width
             && point.y >= bounds.height && point.y < bounds.height + Self.bottomSlop
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        // 下方延伸帶：當成貼在捲動區底緣的點處理（捲動與點選都交給捲動區內容）
-        let inBottomSlop = point.y >= bounds.height && hasScrollableCandidates
+        // 下方延伸帶當成貼在工具列／捲動區底緣的點處理。
+        let inBottomSlop = point.y >= bounds.height && yieldsTopMargin
         let point = inBottomSlop ? CGPoint(x: point.x, y: bounds.height - 0.5) : point
         let hitView = super.hitTest(point, with: event) ?? (inBottomSlop ? scrollView : nil)
         guard let hitView, !(hitView is UIControl) else { return hitView }

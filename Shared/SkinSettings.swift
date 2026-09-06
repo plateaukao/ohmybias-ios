@@ -16,7 +16,12 @@ final class SkinSettings {
 
     private(set) var skinName = "sweetlime（內建）"
     private(set) var isImported = false
-    private(set) var toolbarButtons: [Int] = SkinSettings.defaultToolbarButtons
+    /// 皮膚定義的工具列；未匯入時為內建預設。
+    private(set) var skinToolbarButtons: [Int] = SkinSettings.defaultToolbarButtons
+    /// 實際生效的工具列：容器 app 自訂優先，否則跟隨皮膚。
+    var toolbarButtons: [Int] {
+        OhMyBiasPrefs.toolbarButtons ?? skinToolbarButtons
+    }
     /// 'panel' = 九宮格數字、'row' = Row 數字
     private(set) var keyboardLayout = "panel"
     /// '1' 空白最小（逗號句號較大）、'2' 適中、'3' 空白最大
@@ -38,7 +43,7 @@ final class SkinSettings {
         // 重設為內建預設
         skinName = "sweetlime（內建）"
         isImported = false
-        toolbarButtons = Self.defaultToolbarButtons
+        skinToolbarButtons = Self.defaultToolbarButtons
         keyboardLayout = "panel"
         spaceKeyLayout = "3"
         longPressLayout = "2"
@@ -65,7 +70,7 @@ final class SkinSettings {
             ?? ((root["toolbar"] as? [String: Any])?["toolbarButtons"] as? [Any])
         if let buttons {
             let ids = buttons.compactMap { ($0 as? NSNumber)?.intValue }
-            if !ids.isEmpty { toolbarButtons = ids }
+            if !ids.isEmpty { skinToolbarButtons = ids }
         }
         // 版面：新版頂層鍵優先，舊版 layout 區塊 fallback
         if let v = root["keyboardLayout"] as? String, !v.isEmpty { keyboardLayout = v }
@@ -116,6 +121,11 @@ final class SkinSettings {
     var longPressEnabled: Bool { enabledFeatures.contains("longPress") }
     var showSwipeUpText: Bool { enabledFeatures.contains("showSwipeUpText") }
     var showSwipeDownText: Bool { enabledFeatures.contains("showSwipeDownText") }
+
+    /// 偏好覆寫變更時使依世代快取的鍵盤 UI 重建。
+    func invalidate() {
+        generation += 1
+    }
 
     /// 調色盤色值（#RRGGBB / #RRGGBBAA 字串）；未定義回 nil 由呼叫端用預設
     func colorHex(_ key: String, dark: Bool) -> String? {

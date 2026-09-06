@@ -63,7 +63,7 @@ enum KeyboardTheme {
                        blue: CGFloat(v & 0xFF) / 255, alpha: a)
     }
 
-    /// iOS 27 液態玻璃：系統背板是透明玻璃，鍵盤/工具列背景不再自畫（交給系統）。
+    /// iOS 27 液態玻璃：系統背板是透明玻璃，鍵盤／工具列背景交給系統繪製。
     static var glassHost: Bool {
         if #available(iOS 27.0, *) { return true }
         return false

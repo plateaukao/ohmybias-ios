@@ -355,6 +355,23 @@ func testSkinSettingsParseFlat() {
     skin.reload()  // 還原預設，避免影響其他測試
 }
 
+func testToolbarPreferenceOverride() {
+    let previous = OhMyBiasPrefs.toolbarButtons
+    defer {
+        OhMyBiasPrefs.toolbarButtons = previous
+        SkinSettings.shared.reload()
+    }
+    OhMyBiasPrefs.toolbarButtons = nil
+    let skin = SkinSettings.shared
+    skin.apply(jsonData: #"{"toolbarButtons":[1,3,9]}"#.data(using: .utf8)!)
+    checkEqual(skin.skinToolbarButtons, [1, 3, 9], "保留皮膚工具列")
+    checkEqual(skin.toolbarButtons, [1, 3, 9], "無覆寫時跟隨皮膚")
+    OhMyBiasPrefs.toolbarButtons = [0, 3, 7]
+    checkEqual(skin.toolbarButtons, [0, 3, 7], "偏好覆寫優先於皮膚")
+    OhMyBiasPrefs.toolbarButtons = nil
+    checkEqual(skin.toolbarButtons, [1, 3, 9], "清除覆寫後回到皮膚")
+}
+
 // === 聯想（基本詞組）tests ===
 
 /// v2 資料表（ZYM2 / PYM2 / CFM2）讀取端 — 期望值與 Android DataBinsV2Test 相同（取自 v1 解析結果），
@@ -531,6 +548,7 @@ testEngineModeSwitch()
 testEngineSetEnglishMode()
 testSkinSettingsParse()
 testSkinSettingsParseFlat()
+testToolbarPreferenceOverride()
 testWikiCorpusPhrases()
 testZhuyinLookupBins()
 testSuggestionEngineBasic()
